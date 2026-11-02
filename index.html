@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Bill Scanner</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --line:#e3e6ea; --text:#1d2330; --muted:#6b7380;
+  --accent:#2457d6; --accent-soft:#e8eefc; --ok:#13804b; --ok-soft:#e3f5ea;
+  --warn:#9a6500; --warn-soft:#fff4dc; --bad:#c22f2f; --bad-soft:#fde8e8; --chip:#eef0f3;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#14171c; --panel:#1c2027; --line:#2c323b; --text:#e6e9ee; --muted:#98a1ad;
+    --accent:#6b92ff; --accent-soft:#1f2a44; --ok:#4cc38a; --ok-soft:#173326; --warn:#e2b14a;
+    --warn-soft:#3a2f14; --bad:#ff7a7a; --bad-soft:#3d1d1d; --chip:#262b33; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",Roboto,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{border-color:transparent;background:transparent}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 8px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 8px 0 0;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;background:var(--chip);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
+.spacer{flex:1}
+.toolbar{display:flex;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.toolbar label.chk{display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
+.toolbar label.chk input{width:auto}
+main{flex:1;display:grid;grid-template-columns:280px 1fr 520px;min-height:0}
+.col{min-height:0;overflow:auto;border-right:1px solid var(--line)}
+.col:last-child{border-right:0}
+#list{background:var(--panel)}
+.drop{margin:12px;border:2px dashed var(--line);border-radius:10px;padding:18px 12px;text-align:center;color:var(--muted);font-size:13px}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.doc{display:flex;gap:8px;align-items:flex-start;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer}
+.doc:hover{background:var(--bg)} .doc.sel{background:var(--accent-soft)}
+.doc input{width:auto;margin-top:3px}
+.doc .nm{font-size:13px;word-break:break-all}
+.doc .sub{font-size:12px;color:var(--muted)}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;background:var(--chip);color:var(--muted)}
+.chip.ready{background:var(--accent-soft);color:var(--accent)} .chip.pushed{background:var(--ok-soft);color:var(--ok)}
+.chip.error{background:var(--bad-soft);color:var(--bad)} .chip.scanning{background:var(--warn-soft);color:var(--warn)}
+#viewer{padding:12px;text-align:center;background:var(--bg)}
+#viewer img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin-bottom:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#viewer.zoom img{max-width:none;width:170%}
+.empty{color:var(--muted);padding:40px 16px;text-align:center}
+#editor{background:var(--panel);padding:14px 16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.grid .full{grid-column:1/-1}
+.f label{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
+h3{font-size:13px;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+td,th{padding:3px 4px;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:500}
+td.num input{text-align:right}
+.tag{font-size:11px;padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block}
+.tag.new{background:var(--warn-soft);color:var(--warn)}
+.tag.lbl{color:var(--muted)}
+.totals{display:flex;gap:16px;justify-content:flex-end;font-size:13px;padding:6px 4px;border-top:1px solid var(--line);margin-top:4px}
+.totals b.bad{color:var(--bad)} .totals b.ok{color:var(--ok)}
+.box{border-radius:8px;padding:8px 10px;font-size:13px;margin:8px 0}
+.box.warn{background:var(--warn-soft);color:var(--warn)} .box.info{background:var(--accent-soft);color:var(--accent)}
+.box.bad{background:var(--bad-soft);color:var(--bad)} .box.ok{background:var(--ok-soft);color:var(--ok)}
+.box ul{margin:4px 0 0;padding-left:18px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);padding:0;width:min(640px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog .hd{padding:14px 18px;border-bottom:1px solid var(--line);font-weight:600;display:flex}
+dialog .bd{padding:14px 18px;max-height:70vh;overflow:auto}
+dialog .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.seg{display:flex;gap:6px}
+.seg label{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px}
+.seg input{width:auto;margin-right:6px}
+.hint{font-size:12px;color:var(--muted)}
+a{color:var(--accent)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;display:none;z-index:9;max-width:80vw}
+.hist td{border-top:1px solid var(--line);font-size:12px;padding:5px 4px}
+@media (max-width:1100px){ main{grid-template-columns:240px 1fr} #viewer{display:none} }
+@media (max-width:700px){ main{grid-template-columns:1fr} #list{max-height:35vh} .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Bill Scanner → Tally</h1>
+  <span class="pill" title="TallyPrime XML server"><span class="dot" id="tdot"></span><span id="tstat">Tally…</span></span>
+  <select id="company" style="width:auto;min-width:200px" title="Tally company the vouchers go into"></select>
+  <button class="ghost" id="btnLedgers" title="Re-read ledgers from Tally">↻ Ledgers</button>
+  <span class="hint" id="ledgerCount"></span>
+  <span class="spacer"></span>
+  <button id="btnHistory">History</button>
+  <button id="btnSettings">Settings</button>
+</header>
+
+<div class="toolbar">
+  <button class="primary" id="btnUpload">＋ Add bills</button>
+  <input type="file" id="file" multiple accept=".jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.pdf,.zip" hidden>
+  <button id="btnScanAll">Scan all new</button>
+  <button class="primary" id="btnPush" disabled>Push selected to Tally</button>
+  <button id="btnXml" disabled title="Download Tally import XML for the selected bills">Download XML</button>
+  <label class="chk" title="Optional vouchers show in Tally but do not affect the books until the customer marks them Regular (Ctrl+L)">
+    <input type="checkbox" id="optOptional"> Push as Optional (preview in Tally)</label>
+  <label class="chk"><input type="checkbox" id="optCreate"> Create missing ledgers</label>
+  <span class="spacer"></span>
+  <label class="chk"><input type="checkbox" id="selAll"> Select all ready</label>
+</div>
+
+<main>
+  <section class="col" id="list">
+    <div class="drop" id="drop">Drop bills here<br><span class="hint">JPG, PNG, PDF or ZIP · PDFs are converted to JPG pages</span></div>
+    <div id="docs"></div>
+  </section>
+  <section class="col" id="viewer"><div class="empty">Select a bill to see it here.<br><span class="hint">Click the image to zoom.</span></div></section>
+  <section class="col" id="editor"><div class="empty">
+    <p><b>How it works</b></p>
+    <p>1. Add bills (photos, PDFs or a ZIP).<br>2. Scan — AI reads each bill and builds a Tally voucher using your company's ledgers.<br>3. Check the voucher next to the bill.<br>4. Push — it lands in Tally as an <b>Optional voucher</b>.</p>
+    <p class="hint">In TallyPrime, open <b>Day Book</b> (or Display More Reports → Exception Reports → Optional Vouchers), open the entry, check it and press <b>Ctrl+L</b> to make it Regular. Until then it does not affect your books.</p>
+  </div></section>
+</main>
+
+<datalist id="dlLedgers"></datalist>
+<datalist id="dlVtypes"></datalist>
+
+<dialog id="dlgSettings">
+  <div class="hd">Settings</div>
+  <div class="bd">
+    <h3 style="margin-top:0">AI that reads the bills</h3>
+    <div class="seg">
+      <label><input type="radio" name="provider" value="gemini">Google Gemini<br><span class="hint">Free tier — good for most bills</span></label>
+      <label><input type="radio" name="provider" value="claude">Anthropic Claude<br><span class="hint">Paid — very accurate</span></label>
+    </div>
+    <div class="grid" style="margin-top:10px">
+      <div class="f full" id="fGemini"><label>Gemini API key · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></label><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></div>
+      <div class="f full" id="fClaude"><label>Claude API key · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></label><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
+      <div class="f full"><label>Model</label><input id="sModel" list="dlModels" placeholder="default"><datalist id="dlModels"></datalist></div>
+    </div>
+    <p class="hint">Keys are saved only on this PC (<span id="dataDir"></span>) and sent only to the AI provider you choose.</p>
+    <h3>Tally</h3>
+    <div class="grid">
+      <div class="f"><label>Tally URL</label><input id="sTallyUrl" placeholder="http://localhost:9000"></div>
+      <div class="f"><label>Your company GSTIN (decides purchase vs sales)</label><input id="sOwnGstin" maxlength="15"></div>
+      <div class="f"><label>Default purchase ledger</label><input id="sDefPurchase" list="dlLedgers"></div>
+      <div class="f"><label>Default sales ledger</label><input id="sDefSales" list="dlLedgers"></div>
+      <div class="f"><label>Round-off ledger</label><input id="sDefRound" list="dlLedgers"></div>
+      <div class="f"><label>Freight / other charges ledger</label><input id="sDefFreight" list="dlLedgers"></div>
+      <div class="f"><label>Voucher type for Purchase</label><input id="sVtPurchase" list="dlVtypes" placeholder="Purchase"></div>
+      <div class="f"><label>Voucher type for Sales</label><input id="sVtSales" list="dlVtypes" placeholder="Sales"></div>
+    </div>
+    <p class="hint">TallyPrime must be open with <b>F1 → Settings → Connectivity → TallyPrime acts as Server</b>, port 9000.</p>
+  </div>
+  <div class="ft"><button id="sCancel">Cancel</button><button class="primary" id="sSave">Save</button></div>
+</dialog>
+
+<dialog id="dlgHistory" style="width:min(900px,96vw)">
+  <div class="hd">Pushed to Tally<span class="spacer"></span><button class="ghost" onclick="dlgHistory.close()">✕</button></div>
+  <div class="bd"><table class="hist"><thead><tr><th>When</th><th>Company</th><th>Type</th><th>Party</th><th>Bill no.</th><th style="text-align:right">Amount</th><th>Mode</th><th>File</th></tr></thead><tbody id="histBody"></tbody></table></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (Number(n)||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const PARENTS = ["Sundry Creditors","Sundry Debtors","Purchase Accounts","Sales Accounts","Duties & Taxes","Direct Expenses","Indirect Expenses","Indirect Incomes","Current Liabilities"];
+
+let S = {settings:{}, info:{}, docs:[], sel:null, ledgers:[], ledgerSet:new Set(), checked:new Set(), busy:false};
+
+async function api(path, opt={}) {
+  const o = {...opt, headers:{...(opt.headers||{})}};
+  if (o.body && !(o.body instanceof FormData)) { o.headers["Content-Type"]="application/json"; o.body=JSON.stringify(o.body); }
+  const r = await fetch(path, o);
+  const ct = r.headers.get("content-type")||"";
+  const data = ct.includes("json") ? await r.json() : await r.blob();
+  if (!r.ok || data.ok === false) throw new Error(data.error || ("HTTP "+r.status));
+  return data;
+}
+function toast(msg, ms=3500){ const t=$("#toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", ms); }
+
+// ── boot ─────────────────────────────────────────────────────
+async function boot(){
+  S.info = await api("/api/info");
+  S.settings = await api("/api/settings");
+  $("#optOptional").checked = S.settings.push_as_optional;
+  $("#optCreate").checked = S.settings.create_missing_ledgers;
+  await refreshDocs();
+  await checkTally();
+  setInterval(checkTally, 30000);
+  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) openSettings();
+}
+
+async function checkTally(){
+  try {
+    const st = await api("/api/tally/status");
+    $("#tdot").className = "dot " + (st.online ? "on":"off");
+    $("#tstat").textContent = st.online ? "Tally connected" : "Tally offline";
+    const sel = $("#company"); const cur = S.settings.company;
+    const list = [...new Set([...(st.companies||[]), ...(cur?[cur]:[])])];
+    const html = `<option value="">— choose company —</option>` + list.map(c=>`<option ${c===cur?"selected":""}>${esc(c)}</option>`).join("");
+    if (sel.innerHTML !== html) sel.innerHTML = html;
+    if (st.online && cur && !S.ledgers.length) loadLedgers();
+    if (st.online && !cur && st.companies.length===1) { sel.value = st.companies[0]; sel.onchange(); }
+  } catch(e){ $("#tdot").className="dot off"; $("#tstat").textContent="Tally offline"; }
+}
+
+async function loadLedgers(refresh){
+  if (!S.settings.company) return;
+  try {
+    const r = await api(`/api/tally/ledgers?company=${encodeURIComponent(S.settings.company)}${refresh?"&refresh=1":""}`);
+    S.ledgers = r.ledgers; S.ledgerSet = new Set(r.ledgers.map(l=>l.name.toLowerCase()));
+    $("#dlLedgers").innerHTML = r.ledgers.map(l=>`<option value="${esc(l.name)}">${esc(l.parent)}</option>`).join("");
+    $("#dlVtypes").innerHTML = r.voucher_types.map(v=>`<option value="${esc(v.name)}">${esc(v.parent)}</option>`).join("");
+    $("#ledgerCount").textContent = `${r.ledgers.length} ledgers`;
+    renderEditor();
+  } catch(e){ toast("Ledgers: "+e.message); }
+}
+
+$("#company").onchange = async e => {
+  S.settings = await api("/api/settings",{method:"POST", body:{company:e.target.value}});
+  S.ledgers=[]; S.ledgerSet=new Set(); $("#ledgerCount").textContent="";
+  await loadLedgers();
+  // Re-map scanned drafts that were never pushed to the new company's ledgers
+  for (const d of S.docs.filter(d=>d.bill && d.status!=="pushed")) {
+    try { const r = await api(`/api/docs/${d.id}/remap`,{method:"POST"}); Object.assign(d, r.document); } catch(_){}
+  }
+  renderList(); renderEditor();
+};
+$("#btnLedgers").onclick = () => loadLedgers(true).then(()=>toast("Ledgers refreshed"));
+$("#optOptional").onchange = e => api("/api/settings",{method:"POST", body:{push_as_optional:e.target.checked}}).then(s=>S.settings=s);
+$("#optCreate").onchange = e => api("/api/settings",{method:"POST", body:{create_missing_ledgers:e.target.checked}}).then(s=>S.settings=s);
+
+// ── documents list ───────────────────────────────────────────
+async function refreshDocs(){ S.docs = (await api("/api/docs")).documents; renderList(); }
+
+function renderList(){
+  const el = $("#docs");
+  if (!S.docs.length) { el.innerHTML = `<div class="empty">No bills yet.</div>`; updateButtons(); return; }
+  el.innerHTML = S.docs.map(d => {
+    const amt = d.bill ? `₹ ${money(d.bill.grand_total)}` : "";
+    const party = d.draft ? d.draft.party_ledger : "";
+    const label = {new:"new",scanning:"scanning…",ready:"ready",pushed:d.push&&d.push.optional?"in Tally (optional)":"in Tally",error:"error"}[d.status]||d.status;
+    return `<div class="doc ${S.sel===d.id?"sel":""}" data-id="${d.id}">
+      <input type="checkbox" ${S.checked.has(d.id)?"checked":""} ${d.draft?"":"disabled"} data-chk="${d.id}">
+      <div style="flex:1;min-width:0"><div class="nm">${esc(party || d.name.split("/").pop())}</div>
+      <div class="sub">${esc(d.bill?.invoice_number||"")} ${amt} · ${d.pages}p</div>
+      <span class="chip ${d.status}">${esc(label)}</span>
+      ${d.error?`<div class="sub" style="color:var(--bad)">${esc(d.error.slice(0,140))}</div>`:""}</div>
+      <button class="ghost" data-del="${d.id}" title="Remove">✕</button></div>`;
+  }).join("");
+  el.querySelectorAll(".doc").forEach(n => n.onclick = ev => {
+    if (ev.target.dataset.chk || ev.target.dataset.del) return;
+    select(n.dataset.id);
+  });
+  el.querySelectorAll("[data-chk]").forEach(n => n.onchange = () => { n.checked ? S.checked.add(n.dataset.chk) : S.checked.delete(n.dataset.chk); updateButtons(); });
+  el.querySelectorAll("[data-del]").forEach(n => n.onclick = async () => {
+    if (!confirm("Remove this bill from the list?")) return;
+    await api(`/api/docs/${n.dataset.del}`,{method:"DELETE"});
+    S.checked.delete(n.dataset.del); if (S.sel===n.dataset.del) S.sel=null;
+    await refreshDocs(); renderViewer(); renderEditor();
+  });
+  updateButtons();
+}
+function updateButtons(){
+  for (const id of [...S.checked]) if (!S.docs.find(d=>d.id===id&&d.draft)) S.checked.delete(id);
+  $("#btnPush").disabled = $("#btnXml").disabled = !S.checked.size || S.busy;
+  $("#btnPush").textContent = S.checked.size ? `Push ${S.checked.size} to Tally` : "Push selected to Tally";
+  $("#btnScanAll").disabled = S.busy;
+}
+$("#selAll").onchange = e => { S.checked = new Set(e.target.checked ? S.docs.filter(d=>d.status==="ready").map(d=>d.id) : []); renderList(); };
+
+function select(id){ S.sel=id; renderList(); renderViewer(); renderEditor(); }
+const cur = () => S.docs.find(d=>d.id===S.sel);
+
+function renderViewer(){
+  const d = cur(), v = $("#viewer");
+  if (!d) { v.innerHTML = `<div class="empty">Select a bill to see it here.</div>`; return; }
+  v.innerHTML = Array.from({length:d.pages},(_,i)=>`<img src="/api/docs/${d.id}/page/${i+1}" alt="page ${i+1}">`).join("");
+  v.querySelectorAll("img").forEach(img => img.onclick = () => v.classList.toggle("zoom"));
+}
+
+// ── upload & scan ────────────────────────────────────────────
+$("#btnUpload").onclick = () => $("#file").click();
+$("#file").onchange = e => { upload(e.target.files); e.target.value=""; };
+const drop = $("#drop");
+["dragenter","dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t==="drop" || e.target===document.documentElement) drop.classList.remove("over"); }));
+document.addEventListener("drop", e => { if (e.dataTransfer.files.length) upload(e.dataTransfer.files); });
+drop.onclick = () => $("#file").click();
+
+async function upload(files){
+  if (!files.length) return;
+  const fd = new FormData(); for (const f of files) fd.append("files", f);
+  toast("Preparing files…", 60000);
+  try {
+    const r = await api("/api/upload",{method:"POST", body:fd});
+    toast(`${r.documents.length} bill(s) added` + (r.skipped.length?` · ${r.skipped.length} skipped`:""), 5000);
+    if (r.skipped.length) console.warn("Skipped:", r.skipped);
+    if (r.skipped.length && !r.documents.length) alert("Nothing usable found:\n" + r.skipped.join("\n"));
+    await refreshDocs();
+    if (r.documents.length) { select(r.documents[0].id); scanMany(r.documents.map(d=>d.id)); }
+  } catch(e){ toast("Upload failed: "+e.message, 6000); }
+}
+
+async function scanOne(id){
+  const d = S.docs.find(x=>x.id===id); if (!d) return;
+  d.status="scanning"; d.error=""; renderList();
+  try {
+    const r = await api(`/api/docs/${id}/scan`,{method:"POST"});
+    Object.assign(d, r.document);
+    if (!d.draft.notes.some(n=>/balance/.test(n)) && !d.bill.warnings.length) S.checked.add(id);
+  } catch(e){ d.status="error"; d.error=e.message; }
+  renderList(); if (S.sel===id) renderEditor();
+}
+async function scanMany(ids){
+  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) { openSettings(); toast("Add an AI key first"); return; }
+  S.busy=true; updateButtons();
+  for (const id of ids) await scanOne(id);       // one at a time: friendly to free-tier rate limits
+  S.busy=false; updateButtons();
+}
+$("#btnScanAll").onclick = () => {
+  const ids = S.docs.filter(d=>d.status==="new"||d.status==="error"&&!d.draft).map(d=>d.id);
+  ids.length ? scanMany(ids) : toast("Nothing new to scan");
+};
+
+// ── editor ───────────────────────────────────────────────────
+let saveTimer;
+function queueSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveDraft, 500); }
+async function saveDraft(){
+  const d=cur(); if(!d||!d.draft) return;
+  syncNewLedgers(d.draft);
+  try { const r = await api(`/api/docs/${d.id}/draft`,{method:"PUT", body:d.draft}); d.status=r.document.status; } catch(e){ toast("Save failed: "+e.message); }
+}
+function exists(name){ return S.ledgerSet.has((name||"").toLowerCase()); }
+function guessParent(e, draft){
+  const k=e.kind||"", base=draft.voucher_base||"Purchase";
+  if (k==="party"||e.ledger===draft.party_ledger) return ["Purchase","Credit Note"].includes(base)?"Sundry Creditors":"Sundry Debtors";
+  if (["cgst","sgst","igst","cess","tds"].includes(k)) return "Duties & Taxes";
+  if (k==="goods") return ["Purchase","Debit Note"].includes(base)?"Purchase Accounts":"Sales Accounts";
+  return "Indirect Expenses";
+}
+function syncNewLedgers(draft){
+  const prev = draft.new_ledgers||[], out=[];
+  for (const e of draft.entries){
+    if (!e.ledger || exists(e.ledger) || out.some(n=>n.name.toLowerCase()===e.ledger.toLowerCase())) continue;
+    const p = prev.find(n=>n.name.toLowerCase()===e.ledger.toLowerCase());
+    out.push(p || {name:e.ledger, parent:guessParent(e,draft), create:true,
+      gstin: e.ledger===draft.party_ledger ? draft.party_gstin : "", state: e.ledger===draft.party_ledger ? draft.party_state : "",
+      tax_head: ["cgst","sgst","igst","cess","tds"].includes(e.kind) ? e.kind : null});
+  }
+  draft.new_ledgers = out;
+}
+
+function renderEditor(){
+  const d = cur(), el = $("#editor");
+  if (!d) return;
+  if (!d.draft) {
+    el.innerHTML = `<div class="empty">${d.status==="scanning"?"Reading the bill with AI…":
+      `${d.error?`<div class="box bad">${esc(d.error)}</div>`:""}<p>Not scanned yet.</p><button class="primary" id="btnScanOne">Scan this bill</button>`}</div>`;
+    const b=$("#btnScanOne"); if (b) b.onclick=()=>scanMany([d.id]);
+    return;
+  }
+  const v = d.draft, b = d.bill || {};
+  syncNewLedgers(v);
+  const dr = v.entries.filter(e=>e.dr_cr==="Dr").reduce((s,e)=>s+(+e.amount||0),0);
+  const cr = v.entries.filter(e=>e.dr_cr==="Cr").reduce((s,e)=>s+(+e.amount||0),0);
+  const diff = Math.round((dr-cr)*100)/100;
+  const warns = [...(b.warnings||[]), ...(v.notes||[])];
+  const conf = b.confidence!=null ? Math.round(b.confidence*100) : null;
+  el.innerHTML = `
+    ${d.status==="pushed"?`<div class="box ok">Pushed to Tally ${esc(d.push.company)} on ${esc(d.push.at.replace("T"," "))}${d.push.optional?" as an <b>Optional</b> voucher — open it in Tally and press Ctrl+L to make it Regular":""}.</div>`:""}
+    ${d.error&&d.status!=="pushed"?`<div class="box bad">${esc(d.error)}</div>`:""}
+    ${warns.length?`<div class="box warn"><b>Check:</b><ul>${warns.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`:""}
+    <div class="grid">
+      <div class="f"><label>Voucher type</label><input data-k="voucher_type" list="dlVtypes" value="${esc(v.voucher_type)}"></div>
+      <div class="f"><label>Date</label><input data-k="date" type="date" value="${esc(v.date)}"></div>
+      <div class="f"><label>Party ledger ${v.party_ledger&&!exists(v.party_ledger)&&S.ledgers.length?'<span class="tag new">new</span>':""}</label><input data-k="party_ledger" list="dlLedgers" value="${esc(v.party_ledger)}"></div>
+      <div class="f"><label>Party GSTIN</label><input data-k="party_gstin" value="${esc(v.party_gstin)}"></div>
+      <div class="f"><label>Supplier bill no. (Reference)</label><input data-k="reference" value="${esc(v.reference)}"></div>
+      <div class="f"><label>Voucher no. (blank = Tally auto)</label><input data-k="voucher_number" value="${esc(v.voucher_number)}"></div>
+      <div class="f full"><label>Narration</label><textarea data-k="narration" rows="2">${esc(v.narration)}</textarea></div>
+    </div>
+    <h3>Ledger entries</h3>
+    <table><thead><tr><th>Ledger</th><th style="width:66px">Dr/Cr</th><th style="width:120px;text-align:right">Amount</th><th style="width:24px"></th></tr></thead>
+    <tbody>${v.entries.map((e,i)=>{
+      const nl = (v.new_ledgers||[]).find(n=>n.name.toLowerCase()===(e.ledger||"").toLowerCase());
+      return `<tr><td><input data-e="${i}" data-f="ledger" list="dlLedgers" value="${esc(e.ledger)}">
+        ${e.label?`<span class="tag lbl">${esc(e.label)}</span>`:""}
+        ${nl&&S.ledgers.length?`<span class="tag new">new ledger</span>
+          <select data-nl="${esc(nl.name)}" style="width:auto;font-size:12px;padding:1px 4px">${PARENTS.map(p=>`<option ${p===nl.parent?"selected":""}>${p}</option>`).join("")}</select>`:""}
+        ${e.ledger===v.party_ledger?`<div><input data-e="${i}" data-f="bill_ref" placeholder="Bill-wise ref" value="${esc(e.bill_ref||"")}" style="margin-top:3px;font-size:12px"></div>`:""}</td>
+        <td><select data-e="${i}" data-f="dr_cr"><option ${e.dr_cr==="Dr"?"selected":""}>Dr</option><option ${e.dr_cr==="Cr"?"selected":""}>Cr</option></select></td>
+        <td class="num"><input data-e="${i}" data-f="amount" type="number" step="0.01" value="${(+e.amount).toFixed(2)}"></td>
+        <td><button class="ghost" data-rm="${i}" title="Remove line">✕</button></td></tr>`;}).join("")}
+    </tbody></table>
+    <button class="ghost" id="addRow">＋ Add line</button>
+    <div class="totals"><span>Dr <b>${money(dr)}</b></span><span>Cr <b>${money(cr)}</b></span>
+      <span>Difference <b class="${diff?"bad":"ok"}">${money(diff)}</b></span></div>
+    <div class="actions">
+      <button class="primary" id="pushOne" ${diff?"disabled":""}>Push to Tally</button>
+      <button id="rescan">Re-scan with AI</button>
+      <button id="remap" title="Rebuild from the AI result using current ledgers">Re-map ledgers</button>
+    </div>
+    <h3>What the AI read ${conf!=null?`<span class="chip">${conf}% sure</span>`:""}</h3>
+    <div class="kv">
+      <span>Supplier</span><span>${esc(b.supplier_name)} ${esc(b.supplier_gstin)}</span>
+      <span>Buyer</span><span>${esc(b.buyer_name)} ${esc(b.buyer_gstin)}</span>
+      <span>Bill</span><span>${esc(b.invoice_number)} · ${esc(b.invoice_date)}</span>
+      <span>Taxable</span><span>${money(b.taxable_total)}</span>
+      <span>GST</span><span>CGST ${money(b.cgst)} · SGST ${money(b.sgst)} · IGST ${money(b.igst)}${b.cess?` · Cess ${money(b.cess)}`:""}</span>
+      <span>Round off</span><span>${money(b.round_off)}</span>
+      <span>Total</span><span><b>${money(b.grand_total)}</b></span>
+    </div>
+    ${b.items&&b.items.length?`<h3>Items</h3><table style="font-size:12px"><tr><th>Item</th><th>HSN</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">GST%</th><th style="text-align:right">Taxable</th></tr>
+      ${b.items.map(it=>`<tr><td>${esc(it.description)}</td><td>${esc(it.hsn_sac)}</td><td style="text-align:right">${it.quantity||""} ${esc(it.unit)}</td><td style="text-align:right">${money(it.rate)}</td><td style="text-align:right">${it.gst_rate}</td><td style="text-align:right">${money(it.taxable_value)}</td></tr>`).join("")}</table>`:""}`;
+
+  el.querySelectorAll("[data-k]").forEach(n => n.onchange = () => {
+    const k=n.dataset.k, old=v[k]; v[k]=n.value;
+    if (k==="party_ledger") v.entries.forEach(e=>{ if (e.ledger===old) e.ledger=n.value; });
+    queueSave(); if (k==="party_ledger") renderEditor();
+  });
+  el.querySelectorAll("[data-e]").forEach(n => n.onchange = () => {
+    const e=v.entries[+n.dataset.e]; const f=n.dataset.f;
+    e[f] = f==="amount" ? (Math.round((+n.value||0)*100)/100) : n.value;
+    queueSave(); renderEditor();
+  });
+  el.querySelectorAll("[data-nl]").forEach(n => n.onchange = () => {
+    const nl=v.new_ledgers.find(x=>x.name===n.dataset.nl); nl.parent=n.value; queueSave();
+  });
+  el.querySelectorAll("[data-rm]").forEach(n => n.onclick = () => { v.entries.splice(+n.dataset.rm,1); queueSave(); renderEditor(); });
+  $("#addRow").onclick = () => { v.entries.push({ledger:"",dr_cr:diff>0?"Cr":"Dr",amount:Math.abs(diff),kind:"manual",label:""}); renderEditor(); };
+  $("#pushOne").onclick = async () => { await saveDraft(); push([d.id]); };
+  $("#rescan").onclick = () => scanMany([d.id]);
+  $("#remap").onclick = async () => {
+    try { const r=await api(`/api/docs/${d.id}/remap`,{method:"POST"}); Object.assign(d,r.document); renderEditor(); renderList(); toast("Ledgers re-mapped"); }
+    catch(e){ toast(e.message); }
+  };
+}
+
+// ── push ─────────────────────────────────────────────────────
+async function push(ids, force=false){
+  if (!S.settings.company) { toast("Choose the Tally company first"); return; }
+  clearTimeout(saveTimer); await saveDraft();
+  S.busy=true; updateButtons(); toast("Pushing to Tally…", 60000);
+  try {
+    const r = await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({doc_ids:ids, optional:$("#optOptional").checked, create_missing_ledgers:$("#optCreate").checked, force})}).then(x=>x.json());
+    if (r.error) throw new Error(r.error);
+    const ok = r.results.filter(x=>x.ok), bad = r.results.filter(x=>!x.ok);
+    const dups = bad.filter(x=>x.duplicate);
+    toast(`${ok.length} pushed${bad.length?`, ${bad.length} failed`:""}` + (ok.length&&$("#optOptional").checked?" — open Tally Day Book to review":""), 7000);
+    ok.forEach(x=>S.checked.delete(x.id));
+    await refreshDocs();
+    if (r.results.some(x=>x.ledgers_created)) await loadLedgers(true);
+    renderEditor();
+    if (dups.length && confirm(`${dups.length} bill(s) were pushed before:\n${dups.map(x=>x.name).join("\n")}\n\nPush them again?`)) return push(dups.map(x=>x.id), true);
+    if (bad.length && !dups.length) alert(bad.map(x=>`${x.name}:\n${x.error}`).join("\n\n"));
+  } catch(e){ toast("Push failed: "+e.message, 7000); }
+  finally { S.busy=false; updateButtons(); }
+}
+$("#btnPush").onclick = () => push([...S.checked]);
+$("#btnXml").onclick = async () => {
+  const drafts = S.docs.filter(d=>S.checked.has(d.id)).map(d=>d.draft);
+  try {
+    const blob = await api("/api/xml",{method:"POST", body:{drafts, optional:$("#optOptional").checked}});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="tally_vouchers.xml"; a.click();
+    toast("Saved. In Tally: Import → Transactions → choose this file.");
+  } catch(e){ toast(e.message, 6000); }
+};
+
+// ── settings & history ───────────────────────────────────────
+function openSettings(){
+  const s=S.settings;
+  document.querySelectorAll("[name=provider]").forEach(r=>r.checked = r.value===s.provider);
+  $("#sGeminiKey").value=s.gemini_key; $("#sClaudeKey").value=s.claude_key; $("#sModel").value=s.model;
+  $("#sTallyUrl").value=s.tally_url; $("#sOwnGstin").value=s.own_gstin;
+  $("#sDefPurchase").value=s.default_purchase_ledger; $("#sDefSales").value=s.default_sales_ledger;
+  $("#sDefRound").value=s.default_roundoff_ledger; $("#sDefFreight").value=s.default_freight_ledger;
+  $("#sVtPurchase").value=(s.vtype_map||{}).Purchase||""; $("#sVtSales").value=(s.vtype_map||{}).Sales||"";
+  $("#dataDir").textContent=S.info.data_dir; providerChanged(); $("#dlgSettings").showModal();
+}
+function providerChanged(){
+  const p=(document.querySelector("[name=provider]:checked")||{}).value||"gemini";
+  $("#fGemini").style.display = p==="gemini"?"":"none"; $("#fClaude").style.display = p==="claude"?"":"none";
+  const pr=S.info.providers[p]; $("#dlModels").innerHTML=pr.models.map(m=>`<option>${m}</option>`).join(""); $("#sModel").placeholder=pr.default;
+  if (Object.entries(S.info.providers).some(([k,x])=>k!==p && x.models.includes($("#sModel").value))) $("#sModel").value="";
+}
+document.querySelectorAll("[name=provider]").forEach(r=>r.onchange=providerChanged);
+$("#btnSettings").onclick=openSettings;
+$("#sCancel").onclick=()=>$("#dlgSettings").close();
+$("#sSave").onclick=async()=>{
+  const vt={}; if ($("#sVtPurchase").value) vt.Purchase=$("#sVtPurchase").value; if ($("#sVtSales").value) vt.Sales=$("#sVtSales").value;
+  S.settings = await api("/api/settings",{method:"POST", body:{
+    provider:(document.querySelector("[name=provider]:checked")||{}).value||"gemini",
+    gemini_key:$("#sGeminiKey").value, claude_key:$("#sClaudeKey").value, model:$("#sModel").value,
+    tally_url:$("#sTallyUrl").value, own_gstin:$("#sOwnGstin").value,
+    default_purchase_ledger:$("#sDefPurchase").value, default_sales_ledger:$("#sDefSales").value,
+    default_roundoff_ledger:$("#sDefRound").value, default_freight_ledger:$("#sDefFreight").value, vtype_map:vt}});
+  $("#dlgSettings").close(); toast("Settings saved"); checkTally();
+};
+$("#btnHistory").onclick=async()=>{
+  const h=(await api("/api/history")).history;
+  $("#histBody").innerHTML = h.length ? h.map(x=>`<tr><td>${esc(x.at.replace("T"," "))}</td><td>${esc(x.company)}</td><td>${esc(x.voucher_type)}</td><td>${esc(x.party)}</td><td>${esc(x.reference)}</td><td style="text-align:right">${money(x.amount)}</td><td>${x.optional?"Optional":"Regular"}</td><td>${esc((x.doc||"").split("/").pop())}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">Nothing pushed yet.</td></tr>`;
+  $("#dlgHistory").showModal();
+};
+
+boot().catch(e=>toast("Startup error: "+e.message, 8000));
+</script>
+</body>
+</html>
