@@ -394,6 +394,8 @@ const STATES = {"01":"Jammu & Kashmir","02":"Himachal Pradesh","03":"Punjab","04
 const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const PARTY_GROUPS = ["Sundry Creditors","Sundry Debtors"];
 
+const APP_VERSION = "1.1.0";   // must match VERSION in scanner.py
+
 /* ═════════════ state ═════════════ */
 const S = { settings:{}, info:{}, docs:[], sel:null, ledgers:[], lmap:new Map(), groups:[], gparents:{}, vtypes:[],
   masters:{stock_items:[],stock_groups:[],units:[]}, filter:"all", q:"", checked:new Set(), busy:false, page:"bills", zoom:1, mtab:"ledger" };
@@ -422,6 +424,11 @@ $$(".nav button").forEach(b=>b.onclick=()=>go(b.dataset.page));
 /* ═════════════ boot & Tally ═════════════ */
 async function boot(){
   S.info = await api("/api/info"); $("#ver").textContent = "v"+S.info.version;
+  if (S.info.version !== APP_VERSION) {
+    // The page is read fresh from disk, but the server code only changes after a restart
+    document.body.insertAdjacentHTML("afterbegin", `<div style="position:fixed;top:0;left:0;right:0;z-index:40;background:#b42323;color:#fff;padding:10px 16px;font-weight:600;text-align:center">
+      The scanner program is older (v${esc(S.info.version)}) than this page (v${APP_VERSION}). Close the scanner window and start it again, then reload this page.</div>`);
+  }
   S.settings = await api("/api/settings");
   $("#optOptional").checked = S.settings.push_as_optional; $("#optCreate").checked = S.settings.create_missing_ledgers;
   renderWelcome();
@@ -448,6 +455,7 @@ async function loadLedgers(refresh){
   try {
     const r = await api(`/api/tally/ledgers?company=${encodeURIComponent(S.settings.company)}${refresh?"&refresh=1":""}`);
     S.ledgers = r.ledgers; S.lmap = new Map(r.ledgers.map(l=>[l.name.toLowerCase(), l]));
+    r.ledgers = r.ledgers||[]; r.groups = r.groups||[]; r.voucher_types = r.voucher_types||[];
     S.groups = r.groups; S.gparents = r.group_parents||{}; S.vtypes = r.voucher_types;
     $("#dlLedgers").innerHTML = r.ledgers.map(l=>`<option value="${esc(l.name)}">${esc(l.parent)}</option>`).join("");
     $("#dlGroups").innerHTML = r.groups.map(g=>`<option value="${esc(g)}">`).join("");
@@ -459,7 +467,9 @@ async function loadLedgers(refresh){
 async function loadMasters(){
   if (!S.settings.company) return;
   try {
-    S.masters = await api(`/api/tally/masters?company=${encodeURIComponent(S.settings.company)}`);
+    const m = await api(`/api/tally/masters?company=${encodeURIComponent(S.settings.company)}`);
+    S.masters = {stock_items:m.stock_items||[], stock_groups:m.stock_groups||[], units:m.units||[], _loaded:true};
+    if (m.error) toast("Masters: "+m.error, "bad");
     $("#dlUnits").innerHTML = S.masters.units.map(u=>`<option value="${esc(u.name)}">`).join("");
     $("#dlStockGroups").innerHTML = S.masters.stock_groups.map(g=>`<option value="${esc(g.name)}">`).join("");
     if (S.page==="masters") renderMasters();

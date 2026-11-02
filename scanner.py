@@ -29,7 +29,7 @@ import mapping
 import tally_push
 
 APP_NAME = "AIBillScanner"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PORT = int(os.environ.get("SCANNER_PORT", "5090"))
 
 if getattr(sys, "frozen", False):                       # PyInstaller EXE
