@@ -127,7 +127,7 @@ class ExtractTests(unittest.TestCase):
             out = ai_extract.extract([b"\xff\xd8jpg"], "gemini", "KEY")
         finally:
             ai_extract._post_with_retry = orig
-        self.assertIn("gemini-2.5-flash:generateContent", sent["url"])
+        self.assertIn(ai_extract.PROVIDERS["gemini"]["default"] + ":generateContent", sent["url"])
         self.assertEqual(sent["headers"]["x-goog-api-key"], "KEY")
         self.assertEqual(sent["payload"]["contents"][0]["parts"][1]["inline_data"]["mime_type"], "image/jpeg")
         self.assertEqual(out["grand_total"], 5)
@@ -149,6 +149,60 @@ class ExtractTests(unittest.TestCase):
         content = sent["payload"]["messages"][0]["content"]
         self.assertEqual([c["type"] for c in content], ["image", "image", "text"])
         self.assertEqual(out["grand_total"], 7)
+
+    def _with_fake(self, fake, fn):
+        orig = ai_extract._post_with_retry
+        ai_extract._post_with_retry = fake
+        try:
+            return fn()
+        finally:
+            ai_extract._post_with_retry = orig
+
+    def test_retired_model_switches_to_suggested(self):
+        urls = []
+        ok = {"candidates": [{"content": {"parts": [{"text": '{"grand_total": 9}'}]}}]}
+
+        def fake(url, headers, payload):
+            urls.append(url)
+            if "gemini-2.5-flash:" in url:
+                raise ai_extract.AIError(
+                    "AI request failed (404): This model models/gemini-2.5-flash is no longer available to new "
+                    "users. Please update your code to use models/gemini-3.8-flash for the latest features.", status=404)
+            return ok
+        out = self._with_fake(fake, lambda: ai_extract.extract([b"j"], "gemini", "K", "gemini-2.5-flash"))
+        self.assertIn("gemini-3.8-flash:generateContent", urls[-1])
+        self.assertEqual(out["_model"], "gemini-3.8-flash")
+        self.assertEqual(out["grand_total"], 9)
+
+    def test_retired_model_without_hint_uses_model_list(self):
+        ok = {"candidates": [{"content": {"parts": [{"text": '{"grand_total": 3}'}]}}]}
+
+        def fake(url, headers, payload):
+            if "old-model:" in url:
+                raise ai_extract.AIError("AI request failed (404): model not found", status=404)
+            return ok
+        orig_list = ai_extract.gemini_models
+        ai_extract.gemini_models = lambda key: ["gemini-9.0-flash", "gemini-9.0-pro"]
+        try:
+            out = self._with_fake(fake, lambda: ai_extract.extract([b"j"], "gemini", "K", "old-model"))
+        finally:
+            ai_extract.gemini_models = orig_list
+        self.assertEqual(out["_model"], "gemini-9.0-flash")
+
+    def test_model_ranking_prefers_stable_newest_flash(self):
+        names = ["gemini-3.8-pro", "gemini-3.8-flash-lite", "gemini-4.0-flash-preview", "gemini-3.8-flash",
+                 "gemini-3.5-flash", "text-embedding-004", "gemini-3.8-flash-image"]
+        self.assertEqual(sorted(names, key=ai_extract._gemini_rank)[0], "gemini-3.8-flash")
+
+    def test_other_errors_not_retried(self):
+        calls = []
+
+        def fake(url, headers, payload):
+            calls.append(url)
+            raise ai_extract.AIError("API key rejected (403): bad key", status=403)
+        with self.assertRaises(ai_extract.AIError):
+            self._with_fake(fake, lambda: ai_extract.extract([b"j"], "gemini", "K"))
+        self.assertEqual(len(calls), 1)
 
     def test_no_key(self):
         with self.assertRaises(ai_extract.AIError):

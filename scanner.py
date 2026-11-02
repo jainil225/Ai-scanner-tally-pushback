@@ -198,6 +198,18 @@ def set_settings():
 
 
 # ── Tally reads ─────────────────────────────────────────────────────────────
+@app.get("/api/ai/models")
+def ai_models():
+    """Live list of Gemini models the saved key can use (for the Settings dropdown)."""
+    s = load_settings()
+    if s["provider"] != "gemini" or not s["gemini_key"]:
+        return jsonify({"ok": True, "models": ai_extract.PROVIDERS[s["provider"]]["models"]})
+    try:
+        return jsonify({"ok": True, "models": ai_extract.gemini_models(s["gemini_key"])})
+    except ai_extract.AIError as e:
+        return err(e, 502)
+
+
 @app.get("/api/tally/status")
 def tally_status():
     t = tally()
@@ -297,6 +309,12 @@ def doc_scan(doc_id):
     save_doc(meta)
     try:
         bill = ai_extract.extract(pages, provider, key, s["model"] or None, hint)
+        used = bill.pop("_model", None)
+        if used and used != (s["model"] or ai_extract.PROVIDERS[provider]["default"]):
+            # The chosen model was retired and we switched; remember the working one.
+            s2 = load_settings()
+            s2["model"] = used
+            _write_json(SETTINGS_FILE, s2)
     except ai_extract.AIError as e:
         meta.update(status="error", error=str(e))
         save_doc(meta)

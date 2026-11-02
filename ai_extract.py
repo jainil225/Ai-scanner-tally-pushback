@@ -21,8 +21,10 @@ import requests
 PROVIDERS = {
     "gemini": {
         "label": "Google Gemini (free tier available)",
-        "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
-        "default": "gemini-2.5-flash",
+        # Google retires model names often. If the chosen one is gone, extract()
+        # switches to the replacement Google names, or the best one the key can use.
+        "models": ["gemini-3.8-flash"],
+        "default": "gemini-3.8-flash",
         "key_url": "https://aistudio.google.com/apikey",
     },
     "claude": {
@@ -38,7 +40,9 @@ RETRIES = 3          # on 429 / 5xx (free tiers rate-limit quickly)
 
 
 class AIError(RuntimeError):
-    pass
+    def __init__(self, msg, status=None):
+        super().__init__(msg)
+        self.status = status
 
 
 PROMPT = """You are an expert Indian accountant reading a bill / invoice image for entry into TallyPrime.
@@ -116,7 +120,7 @@ def _post_with_retry(url, headers, payload):
             raise AIError(f"API key rejected ({r.status_code}): {msg}")
         if r.status_code == 429:
             raise AIError(f"Rate limit / quota reached. Wait a minute and retry. ({msg})")
-        raise AIError(f"AI request failed ({r.status_code}): {msg}")
+        raise AIError(f"AI request failed ({r.status_code}): {msg}", status=r.status_code)
     raise AIError(f"AI request failed after retries: {last}")
 
 
@@ -269,6 +273,48 @@ def normalise(d):
     return out
 
 
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+
+def gemini_models(api_key):
+    """Models this key can call with generateContent, best first (newest flash)."""
+    try:
+        r = requests.get(f"{GEMINI_BASE}/models", headers={"x-goog-api-key": api_key},
+                         params={"pageSize": 1000}, timeout=20)
+    except requests.RequestException as e:
+        raise AIError(f"Could not list Gemini models: {e}")
+    if r.status_code != 200:
+        raise AIError(f"Could not list Gemini models (HTTP {r.status_code})", status=r.status_code)
+    names = [m["name"].split("/", 1)[-1] for m in r.json().get("models", [])
+             if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+    return sorted(names, key=_gemini_rank)
+
+
+def _gemini_rank(name):
+    """Sort key: stable 'flash' models first, newest version first."""
+    n = name.lower()
+    m = re.search(r"gemini-(\d+(?:\.\d+)?)", n)
+    ver = float(m.group(1)) if m else 0.0
+    unstable = any(w in n for w in ("preview", "exp", "experimental", "latest", "tts", "image",
+                                    "audio", "live", "embedding", "thinking", "computer"))
+    kind = 0 if "flash" in n and "lite" not in n else 1 if "flash" in n else 2 if "pro" in n else 3
+    return (unstable, "gemini" not in n, kind, -ver, n)
+
+
+def _model_gone(e):
+    msg = str(e).lower()
+    return getattr(e, "status", None) == 404 or ("model" in msg and ("not found" in msg or "no longer" in msg
+                                                                      or "not supported" in msg))
+
+
+def _suggested_model(e, current):
+    """Google's error often names the replacement: '... use models/gemini-x-flash ...'."""
+    for m in re.findall(r"models/([A-Za-z0-9][\w.\-]*[A-Za-z0-9])", str(e)):
+        if m != current:
+            return m
+    return None
+
+
 def extract(pages, provider, api_key, model=None, extra_hint=""):
     """pages: list of JPG bytes for one bill -> normalised dict."""
     if not api_key:
@@ -278,5 +324,21 @@ def extract(pages, provider, api_key, model=None, extra_hint=""):
     model = model or PROVIDERS[provider]["default"]
     prompt = PROMPT + (f"\nContext about the user's company: {extra_hint}\n" if extra_hint else "")
     call = _call_gemini if provider == "gemini" else _call_claude
-    raw = call(pages, api_key, model, prompt)
-    return normalise(parse_json_reply(raw))
+    tried = []
+    while True:
+        tried.append(model)
+        try:
+            raw = call(pages, api_key, model, prompt)
+            break
+        except AIError as e:
+            if provider != "gemini" or not _model_gone(e) or len(tried) >= 4:
+                raise
+            nxt = _suggested_model(e, model)
+            if not nxt or nxt in tried:
+                nxt = next((m for m in gemini_models(api_key) if m not in tried), None)
+            if not nxt:
+                raise AIError(f"{e} (no other Gemini model available for this key)")
+            model = nxt
+    out = normalise(parse_json_reply(raw))
+    out["_model"] = model            # the model that actually answered
+    return out

@@ -491,6 +491,10 @@ function providerChanged(){
   $("#fGemini").style.display = p==="gemini"?"":"none"; $("#fClaude").style.display = p==="claude"?"":"none";
   const pr=S.info.providers[p]; $("#dlModels").innerHTML=pr.models.map(m=>`<option>${m}</option>`).join(""); $("#sModel").placeholder=pr.default;
   if (Object.entries(S.info.providers).some(([k,x])=>k!==p && x.models.includes($("#sModel").value))) $("#sModel").value="";
+  if (p==="gemini" && S.settings.gemini_key_set) {
+    // Google retires model names often: offer what this key can actually use today
+    api("/api/ai/models").then(r=>{ if (r.models.length) $("#dlModels").innerHTML=r.models.map(m=>`<option>${esc(m)}</option>`).join(""); }).catch(()=>{});
+  }
 }
 document.querySelectorAll("[name=provider]").forEach(r=>r.onchange=providerChanged);
 $("#btnSettings").onclick=openSettings;
