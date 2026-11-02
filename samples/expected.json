@@ -132,5 +132,101 @@
         "igst": 0
       }
     ]
+  },
+  "6_textile_yarn_purchase_5pct.jpg": {
+    "what": "Textile: cotton and polyester yarn, GST 5%, same state, quantities in Kg.",
+    "supplier": "Surat Yarn Mills LLP",
+    "supplier_gstin": "24AAPFS4471K1ZB",
+    "buyer": "Demo Traders",
+    "invoice_number": "SYM/26-27/1184",
+    "invoice_date_printed": "08/06/2026",
+    "pages": 1,
+    "taxable_total": 666785.25,
+    "cgst": 16669.63,
+    "sgst": 16669.63,
+    "igst": 0,
+    "round_off": 0.49,
+    "grand_total": 700125.0,
+    "gst_breakup": [
+      {
+        "rate": 5,
+        "taxable": 666785.25,
+        "cgst": 16669.63,
+        "sgst": 16669.63,
+        "igst": 0
+      }
+    ]
+  },
+  "7_job_work_dyeing_bill_5pct.png": {
+    "what": "Textile job work (dyeing & processing) service bill, SAC 998821, GST 5%.",
+    "supplier": "Rangoli Dyeing & Processing House",
+    "supplier_gstin": "24AAKFR9032P1Z4",
+    "buyer": "Demo Traders",
+    "invoice_number": "RDP/0412",
+    "invoice_date_printed": "15-06-2026",
+    "pages": 1,
+    "taxable_total": 78330.0,
+    "cgst": 1958.25,
+    "sgst": 1958.25,
+    "igst": 0,
+    "round_off": -0.5,
+    "grand_total": 82246.0,
+    "gst_breakup": [
+      {
+        "rate": 5,
+        "taxable": 78330.0,
+        "cgst": 1958.25,
+        "sgst": 1958.25,
+        "igst": 0
+      }
+    ]
+  },
+  "8_credit_note_igst.jpg": {
+    "what": "CREDIT NOTE from a supplier (goods returned), IGST 18%, against bill KEC/26-27/0387.",
+    "supplier": "Kaveri Electricals & Co.",
+    "supplier_gstin": "27AAKFK5521M1Z3",
+    "buyer": "Demo Traders",
+    "invoice_number": "KEC/CN/0042",
+    "invoice_date_printed": "02-05-2026",
+    "pages": 1,
+    "taxable_total": 2650.5,
+    "cgst": 0,
+    "sgst": 0,
+    "igst": 477.09,
+    "round_off": 0.41,
+    "grand_total": 3128.0,
+    "gst_breakup": [
+      {
+        "rate": 18,
+        "taxable": 2650.5,
+        "cgst": 0,
+        "sgst": 0,
+        "igst": 477.09
+      }
+    ]
+  },
+  "9_dyes_chemicals_photocopy.jpg": {
+    "what": "Dyes & chemicals purchase, GST 18%, grey low-contrast photocopy with speckles.",
+    "supplier": "Ankleshwar Dyestuff Corporation",
+    "supplier_gstin": "24AABCA6620E1ZS",
+    "buyer": "Demo Traders",
+    "invoice_number": "ADC/2026/0977",
+    "invoice_date_printed": "22.06.2026",
+    "pages": 1,
+    "taxable_total": 200780.0,
+    "cgst": 18070.2,
+    "sgst": 18070.2,
+    "igst": 0,
+    "round_off": -0.4,
+    "grand_total": 236920.0,
+    "gst_breakup": [
+      {
+        "rate": 18,
+        "taxable": 200780.0,
+        "cgst": 18070.2,
+        "sgst": 18070.2,
+        "igst": 0
+      }
+    ]
   }
 }

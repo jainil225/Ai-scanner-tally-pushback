@@ -152,6 +152,32 @@ class Tally:
                 out.append({"name": name, "parent": (el.findtext("PARENT") or "").strip() or name})
         return out
 
+    def _names(self, coll_id, typ, tag, company, fetch="Name, Parent"):
+        root = self._collection(coll_id, typ, fetch, company=company)
+        out = []
+        for el in root.iter(tag):
+            name = (el.get("NAME") or el.findtext("NAME") or "").strip()
+            if name:
+                out.append({"name": name, "parent": (el.findtext("PARENT") or "").strip(),
+                            "unit": (el.findtext("BASEUNITS") or "").strip()})
+        return out
+
+    def stock_items(self, company):
+        return self._names("AIScanItems", "StockItem", "STOCKITEM", company, "Name, Parent, BaseUnits")
+
+    def stock_groups(self, company):
+        return self._names("AIScanStockGroups", "StockGroup", "STOCKGROUP", company)
+
+    def units(self, company):
+        return self._names("AIScanUnits", "Unit", "UNIT", company, "Name")
+
+    def create_master(self, company, kind, data):
+        if kind not in MASTER_BUILDERS:
+            raise TallyError(f"Unknown master type '{kind}'")
+        if not (data.get("name") or "").strip():
+            raise TallyError("Name is required")
+        return self.import_xml(company, "All Masters", MASTER_BUILDERS[kind](data))
+
     # ── writes ──────────────────────────────────────────────────────────────
     def import_xml(self, company, report, messages_xml):
         body = build_import_envelope(company, report, messages_xml)
@@ -179,30 +205,101 @@ GST_HEADS = {"cgst": "Central Tax", "sgst": "State Tax", "utgst": "State Tax", "
              "cess": "Cess"}
 
 
+def _addr_xml(address):
+    lines = [x.strip() for x in str(address or "").replace("\r", "").split("\n") if x.strip()]
+    if not lines:
+        return ""
+    return '<ADDRESS.LIST TYPE="String">' + "".join(f"<ADDRESS>{xe(x)}</ADDRESS>" for x in lines) + "</ADDRESS.LIST>"
+
+
 def ledger_master_xml(l):
-    """l = {name, parent, gstin?, state?, tax_head?}"""
-    name, parent = l["name"], l.get("parent") or "Sundry Creditors"
+    """l = {name, parent, primary?, gstin?, gst_type?, state?, address?, pincode?, pan?, mailing_name?,
+            billwise?, tax_head?, gst_rate?, opening?, opening_side?}
+    `primary` is the primary group (e.g. 'Sundry Creditors') when `parent` is a sub-group."""
+    name, parent = l["name"].strip(), (l.get("parent") or "Sundry Creditors").strip()
+    kind = l.get("primary") or parent
     parts = [f'<TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="{xe(name)}" ACTION="Create">',
              f"<NAME.LIST><NAME>{xe(name)}</NAME></NAME.LIST>",
              f"<PARENT>{xe(parent)}</PARENT>"]
-    if parent in ("Sundry Creditors", "Sundry Debtors"):
-        parts.append("<ISBILLWISEON>Yes</ISBILLWISEON>")
+    if kind in ("Sundry Creditors", "Sundry Debtors"):
+        parts.append(f"<ISBILLWISEON>{'No' if l.get('billwise') is False else 'Yes'}</ISBILLWISEON>")
+        gst_type = l.get("gst_type") or ("Regular" if l.get("gstin") else "")
+        if gst_type:
+            parts.append(f"<GSTREGISTRATIONTYPE>{xe(gst_type)}</GSTREGISTRATIONTYPE>")
         if l.get("gstin"):
-            parts += ["<GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>",
-                      f"<PARTYGSTIN>{xe(l['gstin'])}</PARTYGSTIN>"]
-        if l.get("state"):
-            parts.append(f"<LEDSTATENAME>{xe(l['state'])}</LEDSTATENAME>")
+            parts.append(f"<PARTYGSTIN>{xe(l['gstin'].strip().upper())}</PARTYGSTIN>")
         parts.append("<COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>")
-    elif parent == "Duties & Taxes":
+    if l.get("state"):
+        parts.append(f"<LEDSTATENAME>{xe(l['state'])}</LEDSTATENAME>")
+    if l.get("mailing_name"):
+        parts.append(f"<MAILINGNAME.LIST><MAILINGNAME>{xe(l['mailing_name'])}</MAILINGNAME></MAILINGNAME.LIST>")
+    parts.append(_addr_xml(l.get("address")))
+    if l.get("pincode"):
+        parts.append(f"<PINCODE>{xe(l['pincode'])}</PINCODE>")
+    if l.get("pan"):
+        parts.append(f"<INCOMETAXNUMBER>{xe(l['pan'].strip().upper())}</INCOMETAXNUMBER>")
+    if kind == "Duties & Taxes":
         head = l.get("tax_head")
         if head in GST_HEADS:
             parts += ["<TAXTYPE>GST</TAXTYPE>", f"<GSTDUTYHEAD>{GST_HEADS[head]}</GSTDUTYHEAD>"]
+            if l.get("gst_rate"):
+                parts.append(f"<RATEOFTAXCALCULATION>{float(l['gst_rate']):g}</RATEOFTAXCALCULATION>")
         elif head == "tds":
             parts.append("<TAXTYPE>TDS</TAXTYPE>")
-    elif parent in ("Purchase Accounts", "Sales Accounts"):
+    elif kind in ("Purchase Accounts", "Sales Accounts"):
         parts.append("<AFFECTSSTOCK>No</AFFECTSSTOCK>")
+    if l.get("opening"):
+        amt = abs(float(l["opening"]))
+        dr = (l.get("opening_side") or "Dr") == "Dr"
+        parts.append(f"<OPENINGBALANCE>{-amt if dr else amt:.2f}</OPENINGBALANCE>")
     parts.append("</LEDGER></TALLYMESSAGE>")
     return "".join(parts)
+
+
+def group_master_xml(g):
+    """g = {name, parent}"""
+    return (f'<TALLYMESSAGE xmlns:UDF="TallyUDF"><GROUP NAME="{xe(g["name"])}" ACTION="Create">'
+            f'<NAME.LIST><NAME>{xe(g["name"])}</NAME></NAME.LIST><PARENT>{xe(g.get("parent") or "")}</PARENT>'
+            f"</GROUP></TALLYMESSAGE>")
+
+
+def unit_master_xml(u):
+    """u = {name (symbol, e.g. 'Nos'), formal_name?, decimals?}"""
+    return (f'<TALLYMESSAGE xmlns:UDF="TallyUDF"><UNIT NAME="{xe(u["name"])}" ACTION="Create">'
+            f'<NAME>{xe(u["name"])}</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>'
+            f'<ORIGINALNAME>{xe(u.get("formal_name") or u["name"])}</ORIGINALNAME>'
+            f'<DECIMALPLACES>{int(u.get("decimals") or 0)}</DECIMALPLACES></UNIT></TALLYMESSAGE>')
+
+
+def stock_item_master_xml(it):
+    """it = {name, parent?, unit, hsn?, gst_rate?, opening_qty?, opening_rate?}"""
+    parts = [f'<TALLYMESSAGE xmlns:UDF="TallyUDF"><STOCKITEM NAME="{xe(it["name"])}" ACTION="Create">',
+             f'<NAME.LIST><NAME>{xe(it["name"])}</NAME></NAME.LIST>',
+             f'<PARENT>{xe(it.get("parent") or "")}</PARENT>',
+             f'<BASEUNITS>{xe(it.get("unit") or "Nos")}</BASEUNITS>']
+    if it.get("hsn") or it.get("gst_rate"):
+        rate = float(it.get("gst_rate") or 0)
+        heads = [("Integrated Tax", rate), ("Central Tax", rate / 2), ("State Tax", rate / 2), ("Cess", 0)]
+        parts.append("<GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>")
+        parts.append("<GSTDETAILS.LIST><APPLICABLEFROM>20170701</APPLICABLEFROM><CALCULATIONTYPE>On Value"
+                     "</CALCULATIONTYPE>" + (f"<HSNCODE>{xe(it['hsn'])}</HSNCODE>" if it.get("hsn") else "")
+                     + "<TAXABILITY>Taxable</TAXABILITY><STATEWISEDETAILS.LIST><STATENAME>&#4; Any</STATENAME>"
+                     + "".join(f"<RATEDETAILS.LIST><GSTRATEDUTYHEAD>{h}</GSTRATEDUTYHEAD>"
+                               f"<GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>"
+                               f"<GSTRATE>{r:g}</GSTRATE></RATEDETAILS.LIST>" for h, r in heads)
+                     + "</STATEWISEDETAILS.LIST></GSTDETAILS.LIST>")
+    if it.get("opening_qty"):
+        q = float(it["opening_qty"])
+        r = float(it.get("opening_rate") or 0)
+        u = it.get("unit") or "Nos"
+        parts.append(f"<OPENINGBALANCE>{q:g} {xe(u)}</OPENINGBALANCE><OPENINGRATE>{r:.2f}/{xe(u)}</OPENINGRATE>"
+                     f"<OPENINGVALUE>{-q * r:.2f}</OPENINGVALUE>")
+    parts.append("</STOCKITEM></TALLYMESSAGE>")
+    return "".join(parts)
+
+
+MASTER_BUILDERS = {"ledger": ledger_master_xml, "group": group_master_xml,
+                   "unit": unit_master_xml, "stock_item": stock_item_master_xml}
 
 
 def tdate(iso):
@@ -266,7 +363,7 @@ def voucher_xml(v, optional=True):
         out.append(f"<AMOUNT>{fmt_amt(signed)}</AMOUNT>")
         if e.get("bill_ref"):
             out.append(f"<BILLALLOCATIONS.LIST><NAME>{xe(e['bill_ref'])}</NAME>"
-                       f"<BILLTYPE>New Ref</BILLTYPE><AMOUNT>{fmt_amt(signed)}</AMOUNT>"
+                       f"<BILLTYPE>{xe(e.get('bill_type') or 'New Ref')}</BILLTYPE><AMOUNT>{fmt_amt(signed)}</AMOUNT>"
                        f"</BILLALLOCATIONS.LIST>")
         out.append("</ALLLEDGERENTRIES.LIST>")
     out.append("</VOUCHER></TALLYMESSAGE>")

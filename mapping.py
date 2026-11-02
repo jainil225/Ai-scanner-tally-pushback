@@ -45,22 +45,42 @@ def clean_name(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
-def primary_group(parent, groups, _depth=0):
-    """Walk up the group tree to the primary group ('Sundry Creditors', 'Duties & Taxes' ...)."""
-    if not parent or _depth > 20:
-        return parent
-    up = groups.get(parent)
-    if not up or up in ("Primary", "\x04 Primary", parent):
-        return parent
-    return primary_group(up, groups, _depth + 1)
+# Groups the app cares about. Tally nests some of them (Sundry Creditors and
+# Duties & Taxes sit under Current Liabilities), so walking to the very top
+# would lose them: we stop at the first of these.
+KEY_GROUPS = ("Sundry Creditors", "Sundry Debtors", "Duties & Taxes", "Purchase Accounts", "Sales Accounts",
+              "Direct Expenses", "Indirect Expenses", "Direct Incomes", "Indirect Incomes", "Bank Accounts",
+              "Bank OD A/c", "Cash-in-Hand", "Stock-in-Hand", "Fixed Assets", "Capital Account",
+              "Loans & Advances (Asset)", "Secured Loans", "Unsecured Loans", "Provisions", "Deposits (Asset)",
+              "Current Assets", "Current Liabilities", "Investments", "Loans (Liability)", "Suspense A/c")
+
+
+def group_chain(parent, groups):
+    """['Input GST', 'Duties & Taxes', 'Current Liabilities'] for a ledger whose parent is 'Input GST'."""
+    chain, g = [], parent
+    while g and g not in chain and len(chain) < 25:
+        chain.append(g)
+        up = groups.get(g)
+        if not up or up in ("Primary", "\x04 Primary"):
+            break
+        g = up
+    return chain
+
+
+def primary_group(parent, groups):
+    """The first key group above a ledger ('Sundry Creditors', 'Duties & Taxes' ...)."""
+    chain = group_chain(parent, groups)
+    return next((g for g in chain if g in KEY_GROUPS), chain[-1] if chain else parent)
 
 
 class LedgerBook:
     def __init__(self, ledgers, groups=None):
         groups = groups or {}
+        self.groups = groups
         self.all = []
         for l in ledgers:
             l = dict(l)
+            l["chain"] = group_chain(l.get("parent", ""), groups)
             l["primary"] = primary_group(l.get("parent", ""), groups)
             self.all.append(l)
         self.names = {l["name"].lower(): l for l in self.all}
@@ -72,7 +92,7 @@ class LedgerBook:
         return self.names.get((name or "").lower())
 
     def in_groups(self, *prim):
-        return [l for l in self.all if l["primary"] in prim or l.get("parent") in prim]
+        return [l for l in self.all if any(g in prim for g in l.get("chain") or [l.get("parent")])]
 
     def find_party(self, name, gstin):
         if gstin:
@@ -165,8 +185,9 @@ def tax_rows(bill):
     return list(rows.values())
 
 
-def build_draft(bill, book, settings=None):
-    """bill: normalised dict from ai_extract. book: LedgerBook. -> voucher draft dict."""
+def build_draft(bill, book, settings=None, as_typed=False):
+    """bill: normalised dict from ai_extract. book: LedgerBook. -> voucher draft dict.
+    as_typed=True (Excel import): use the voucher type exactly as given, no direction guessing."""
     st = settings or {}
     vt_base = VTYPE_BY_DOC.get(bill["doc_type"], "Purchase")
     if vt_base == "Journal":
@@ -178,16 +199,31 @@ def build_draft(bill, book, settings=None):
             vt_base = "Sales"
         elif bill["buyer_gstin"] == own_gstin and vt_base == "Sales":
             vt_base = "Purchase"
+    # Notes read from paper: who issued it decides the entry in OUR books.
+    #   supplier's credit note (goods returned to them) -> our Debit Note (purchase return)
+    #   supplier's debit note (extra charge)            -> our Purchase
+    #   a note we issued                                -> as printed
+    note_by_us = None
+    pre_notes = []
+    if not as_typed and vt_base in ("Credit Note", "Debit Note"):
+        company = st.get("company") or ""
+        note_by_us = bool((own_gstin and bill["supplier_gstin"] == own_gstin) or
+                          (company and clean_name(bill["supplier_name"]) == clean_name(company)))
+        if not note_by_us:
+            new_vt = "Debit Note" if vt_base == "Credit Note" else "Purchase"
+            pre_notes.append(f"{vt_base} issued by the supplier - entered as {new_vt} in your books")
+            vt_base = new_vt
     is_purchase_side = vt_base in ("Purchase", "Debit Note")
     goods_side = "Purchase" if is_purchase_side else "Sales"
     vt_name = (st.get("vtype_map") or {}).get(vt_base) or vt_base
 
-    if is_purchase_side:
+    party_is_supplier = is_purchase_side if note_by_us is None else not note_by_us
+    if party_is_supplier:
         p_name, p_gstin, p_state = bill["supplier_name"], bill["supplier_gstin"], bill["supplier_state"]
     else:
         p_name, p_gstin, p_state = bill["buyer_name"], bill["buyer_gstin"], bill["buyer_state"]
 
-    notes = []
+    notes = list(pre_notes)
     new_ledgers = []
     party, score = book.find_party(p_name, p_gstin)
     if not party:

@@ -457,6 +457,26 @@ class MappingTests(unittest.TestCase):
         d = mapping.build_draft(bill(cgst=0, sgst=0, igst=1800), book)
         self.assertIn("Integrated Tax (Input)", {e["ledger"] for e in d["entries"]})
 
+    def test_supplier_credit_note_becomes_debit_note(self):
+        b = bill(doc_type="credit_note", cgst=0, sgst=0, igst=1800,
+                 supplier_name="Kaveri Electricals & Co.", supplier_gstin="27AAKFK5521M1Z3")
+        d = mapping.build_draft(b, book_from_fake(), {"own_gstin": "24AAAAA0000A1Z5"})
+        led = {e["ledger"]: e["dr_cr"] for e in d["entries"]}
+        self.assertEqual(d["voucher_type"], "Debit Note")
+        self.assertEqual(d["party_ledger"], "Kaveri Electricals & Co.")
+        self.assertEqual(led["Kaveri Electricals & Co."], "Dr")      # supplier owes us
+        self.assertEqual(led["Purchase @ 18%"], "Cr")
+        self.assertEqual(led["Input IGST"], "Cr")
+        self.assertEqual(balance(d["entries"]), 0)
+
+    def test_our_debit_note_to_supplier(self):
+        b = bill(doc_type="debit_note", supplier_name="Demo Traders", supplier_gstin="24AAAAA0000A1Z5",
+                 buyer_name="Sharma Steel Pvt Ltd", buyer_gstin="24AAACS1234F1Z5")
+        d = mapping.build_draft(b, book_from_fake(), {"own_gstin": "24AAAAA0000A1Z5"})
+        self.assertEqual(d["voucher_type"], "Debit Note")
+        self.assertEqual(d["party_ledger"], "Sharma Steel Pvt Ltd")
+        self.assertEqual({e["ledger"]: e["dr_cr"] for e in d["entries"]}["Sharma Steel Pvt Ltd"], "Dr")
+
     def test_empty_book_proposes_ledgers(self):
         d = mapping.build_draft(bill(), mapping.LedgerBook([]))
         names = {n["name"] for n in d["new_ledgers"]}
@@ -520,6 +540,8 @@ class EndToEndTests(unittest.TestCase):
         shutil.rmtree(_tmp, ignore_errors=True)
 
     def setUp(self):
+        if os.path.exists(self.scanner.HISTORY_FILE):
+            os.remove(self.scanner.HISTORY_FILE)          # each test starts with no push history
         self.state.imports.clear()
         self.state.reject_vouchers = False
         self.scanner._ledger_cache.clear()
@@ -564,7 +586,8 @@ class EndToEndTests(unittest.TestCase):
         b = bill(supplier_name="Fresh Metals", supplier_gstin="24FRESH1234F1Z1", invoice_number="FM-9")
         doc_id, doc = self.upload_and_scan(b)
         self.assertEqual(doc["draft"]["new_ledgers"][0]["name"], "Fresh Metals")
-        r = self.client.post("/api/push", json={"doc_ids": [doc_id], "optional": False}).get_json()
+        r = self.client.post("/api/push", json={"doc_ids": [doc_id], "optional": False,
+                                                "create_missing_ledgers": True}).get_json()
         self.assertTrue(r["ok"], r)
         self.assertEqual(r["results"][0]["ledgers_created"], ["Fresh Metals"])
         self.assertEqual(len(self.state.imports), 2)                 # masters, then voucher
@@ -592,6 +615,89 @@ class EndToEndTests(unittest.TestCase):
         root = ET.fromstring(resp.data)
         self.assertEqual(root.findtext(".//REPORTNAME"), "Vouchers")
         self.assertIsNotNone(root.find(".//VOUCHER"))
+
+    def test_create_masters_from_app(self):
+        r = self.client.post("/api/masters", json={"items": [
+            {"kind": "group", "data": {"name": "Creditors - Yarn", "parent": "Sundry Creditors"}},
+            {"kind": "unit", "data": {"name": "Mtr"}},
+            {"kind": "stock_item", "data": {"name": "Cotton Yarn 30s", "unit": "Kg", "hsn": "5205", "gst_rate": 5}},
+        ]}).get_json()
+        self.assertTrue(r["ok"], r)
+        r = self.client.post("/api/masters", json={"kind": "ledger", "data": {
+            "name": "Surat Yarn Mills", "parent": "Creditors - Yarn", "gstin": "24AAPFS1234K1Z9",
+            "state": "Gujarat", "address": "Ring Road\nSurat", "pan": "AAPFS1234K"}}).get_json()
+        self.assertTrue(r["ok"], r)
+        xml = self.state.imports[-1]
+        self.assertIn("<ISBILLWISEON>Yes</ISBILLWISEON>", xml)          # sub-group of Sundry Creditors
+        self.assertIn("<PARTYGSTIN>24AAPFS1234K1Z9</PARTYGSTIN>", xml)
+        led = self.client.get("/api/tally/ledgers").get_json()
+        self.assertIn("Surat Yarn Mills", [l["name"] for l in led["ledgers"]])
+        self.assertIn("Creditors - Yarn", led["groups"])
+        m = self.client.get("/api/tally/masters").get_json()
+        self.assertIn("Cotton Yarn 30s", [i["name"] for i in m["stock_items"]])
+        self.assertIn("Mtr", [u["name"] for u in m["units"]])
+        # Creating an existing ledger is a no-op, not an error
+        r = self.client.post("/api/masters", json={"kind": "ledger", "data": {"name": "surat yarn mills"}}).get_json()
+        self.assertTrue(r["results"][0].get("existed"))
+
+    def test_excel_bill_register_import_and_push(self):
+        import excel_import
+        data = excel_import.template_xlsx("bills")
+        r = self.client.post("/api/import/excel", data={"files": (io.BytesIO(data), "bills.xlsx")},
+                             content_type="multipart/form-data").get_json()
+        self.assertTrue(r["ok"], r)
+        docs = r["documents"]
+        self.assertEqual(len(docs), 3)                       # Kaveri's two rows are one bill
+        kav = next(d for d in docs if "Kaveri" in d["name"])
+        self.assertEqual(kav["source"], "excel")
+        self.assertEqual(len(kav["rows"]), 2)
+        self.assertEqual(kav["bill"]["grand_total"], 75241)
+        self.assertEqual(balance(kav["draft"]["entries"]), 0)
+        sharma = next(d for d in docs if "Sharma" in d["name"])
+        self.assertEqual(sharma["draft"]["party_ledger"], "Sharma Steel Pvt Ltd")
+        self.assertEqual(balance(sharma["draft"]["entries"]), 0)
+        r = self.client.post("/api/push", json={"doc_ids": [sharma["id"]], "force": True}).get_json()
+        self.assertTrue(r["ok"], r)
+
+    def test_excel_ledger_lines_import(self):
+        import excel_import
+        data = excel_import.template_xlsx("ledger")
+        r = self.client.post("/api/import/excel", data={"files": (io.BytesIO(data), "jv.xlsx")},
+                             content_type="multipart/form-data").get_json()
+        self.assertTrue(r["ok"], r)
+        self.assertEqual([d["draft"]["voucher_type"] for d in r["documents"]], ["Payment", "Journal", "Receipt"])
+        pay = r["documents"][0]["draft"]
+        self.assertEqual(pay["party_ledger"], "Sharma Steel Pvt Ltd")
+        self.assertEqual(pay["entries"][0]["bill_type"], "Agst Ref")
+        self.assertEqual(pay["date"], "2026-05-10")
+
+    def test_csv_with_own_headings(self):
+        csv_data = ("Invoice Date,Supplier,GSTIN,Invoice No,Taxable Value,GST Rate,Invoice Value\n"
+                    "01/06/2026,Sharma Steel Pvt Ltd,24AAACS1234F1Z5,SS/2001,1000,18%,1180\n").encode()
+        r = self.client.post("/api/import/excel", data={"files": (io.BytesIO(csv_data), "my.csv")},
+                             content_type="multipart/form-data").get_json()
+        self.assertTrue(r["ok"], r)
+        d = r["documents"][0]["draft"]
+        self.assertEqual(d["date"], "2026-06-01")
+        led = {e["ledger"]: e["amount"] for e in d["entries"]}
+        self.assertEqual(led["Input CGST 9%"], 90)
+
+    def test_bad_excel_reports_reason(self):
+        r = self.client.post("/api/import/excel", data={"files": (io.BytesIO(b"a,b\n1,2\n"), "x.csv")},
+                             content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("template", r.get_json()["error"].lower())
+
+    def test_load_samples(self):
+        r = self.client.post("/api/samples/load").get_json()
+        self.assertTrue(r["ok"], r)
+        imgs = [d for d in r["documents"] if d["source"] == "scan"]
+        xls = [d for d in r["documents"] if d["source"] == "excel"]
+        self.assertEqual(len(imgs), 9)                          # 9 bill images / PDFs
+        self.assertGreaterEqual(len(xls), 9)                    # bills + ledger-line vouchers from both sheets
+        self.assertEqual(r["skipped"], [])
+        for d in xls:
+            self.assertEqual(balance(d["draft"]["entries"]), 0, d["name"])
 
     def test_settings_mask_keys(self):
         s = self.client.get("/api/settings").get_json()

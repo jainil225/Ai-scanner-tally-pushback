@@ -6,264 +6,577 @@
 <title>AI Bill Scanner</title>
 <style>
 :root{
-  --bg:#f5f6f8; --panel:#fff; --line:#e3e6ea; --text:#1d2330; --muted:#6b7380;
-  --accent:#2457d6; --accent-soft:#e8eefc; --ok:#13804b; --ok-soft:#e3f5ea;
-  --warn:#9a6500; --warn-soft:#fff4dc; --bad:#c22f2f; --bad-soft:#fde8e8; --chip:#eef0f3;
+  --bg:#f3f5f9; --panel:#ffffff; --panel2:#f8f9fc; --line:#e2e6ee; --line2:#eef1f6;
+  --text:#18202f; --muted:#667085; --faint:#98a2b3;
+  --accent:#2457d6; --accent-2:#1b46b3; --accent-soft:#e9effd; --accent-ring:rgba(36,87,214,.18);
+  --ok:#12805c; --ok-soft:#e3f6ee; --warn:#a05a00; --warn-soft:#fff3dc;
+  --bad:#d12f2f; --bad-soft:#fdecec; --bad-line:#f3b4b4;
+  --side:#0f1b33; --side-2:#16264a; --side-text:#c9d3e6; --side-muted:#7f8fb0;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --shadow-lg:0 12px 32px rgba(16,24,40,.18);
+  --r:10px;
+}
+:root[data-theme="dark"]{
+  --bg:#0e1320; --panel:#151c2c; --panel2:#111827; --line:#253047; --line2:#1c2538;
+  --text:#e6eaf2; --muted:#9aa6bd; --faint:#6b7891;
+  --accent:#6d93ff; --accent-2:#8aa9ff; --accent-soft:#1c2a4d; --accent-ring:rgba(109,147,255,.25);
+  --ok:#43c48f; --ok-soft:#14322a; --warn:#f0b54d; --warn-soft:#3a2d12;
+  --bad:#ff6b6b; --bad-soft:#3b1b1f; --bad-line:#7a3138;
+  --side:#0a0f1b; --side-2:#141d33; --shadow:none; --shadow-lg:0 12px 32px rgba(0,0,0,.5);
 }
 @media (prefers-color-scheme: dark){
-  :root{ --bg:#14171c; --panel:#1c2027; --line:#2c323b; --text:#e6e9ee; --muted:#98a1ad;
-    --accent:#6b92ff; --accent-soft:#1f2a44; --ok:#4cc38a; --ok-soft:#173326; --warn:#e2b14a;
-    --warn-soft:#3a2f14; --bad:#ff7a7a; --bad-soft:#3d1d1d; --chip:#262b33; }
+  :root:not([data-theme="light"]){
+    --bg:#0e1320; --panel:#151c2c; --panel2:#111827; --line:#253047; --line2:#1c2538;
+    --text:#e6eaf2; --muted:#9aa6bd; --faint:#6b7891;
+    --accent:#6d93ff; --accent-2:#8aa9ff; --accent-soft:#1c2a4d; --accent-ring:rgba(109,147,255,.25);
+    --ok:#43c48f; --ok-soft:#14322a; --warn:#f0b54d; --warn-soft:#3a2d12;
+    --bad:#ff6b6b; --bad-soft:#3b1b1f; --bad-line:#7a3138;
+    --side:#0a0f1b; --side-2:#141d33; --shadow:none; --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  }
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",Roboto,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",Roboto,system-ui,-apple-system,sans-serif;display:flex;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button.ghost{border-color:transparent;background:transparent}
-button:disabled{opacity:.5;cursor:default}
-input,select,textarea{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 8px;width:100%}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
-header h1{font-size:16px;margin:0 8px 0 0;font-weight:600}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;background:var(--chip);font-size:12px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-.dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
-.spacer{flex:1}
-.toolbar{display:flex;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-.toolbar label.chk{display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
-.toolbar label.chk input{width:auto}
-main{flex:1;display:grid;grid-template-columns:280px 1fr 520px;min-height:0}
-.col{min-height:0;overflow:auto;border-right:1px solid var(--line)}
-.col:last-child{border-right:0}
-#list{background:var(--panel)}
-.drop{margin:12px;border:2px dashed var(--line);border-radius:10px;padding:18px 12px;text-align:center;color:var(--muted);font-size:13px}
-.drop.over{border-color:var(--accent);background:var(--accent-soft)}
-.doc{display:flex;gap:8px;align-items:flex-start;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer}
-.doc:hover{background:var(--bg)} .doc.sel{background:var(--accent-soft)}
-.doc input{width:auto;margin-top:3px}
-.doc .nm{font-size:13px;word-break:break-all}
-.doc .sub{font-size:12px;color:var(--muted)}
-.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;background:var(--chip);color:var(--muted)}
-.chip.ready{background:var(--accent-soft);color:var(--accent)} .chip.pushed{background:var(--ok-soft);color:var(--ok)}
-.chip.error{background:var(--bad-soft);color:var(--bad)} .chip.scanning{background:var(--warn-soft);color:var(--warn)}
-#viewer{padding:12px;text-align:center;background:var(--bg)}
-#viewer img{max-width:100%;border:1px solid var(--line);border-radius:4px;margin-bottom:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-#viewer.zoom img{max-width:none;width:170%}
-.empty{color:var(--muted);padding:40px 16px;text-align:center}
-#editor{background:var(--panel);padding:14px 16px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
-.grid .full{grid-column:1/-1}
-.f label{display:block;font-size:12px;color:var(--muted);margin-bottom:2px}
-h3{font-size:13px;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-table{width:100%;border-collapse:collapse}
-td,th{padding:3px 4px;text-align:left;vertical-align:top}
-th{font-size:12px;color:var(--muted);font-weight:500}
-td.num input{text-align:right}
-.tag{font-size:11px;padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block}
-.tag.new{background:var(--warn-soft);color:var(--warn)}
-.tag.lbl{color:var(--muted)}
-.totals{display:flex;gap:16px;justify-content:flex-end;font-size:13px;padding:6px 4px;border-top:1px solid var(--line);margin-top:4px}
-.totals b.bad{color:var(--bad)} .totals b.ok{color:var(--ok)}
-.box{border-radius:8px;padding:8px 10px;font-size:13px;margin:8px 0}
-.box.warn{background:var(--warn-soft);color:var(--warn)} .box.info{background:var(--accent-soft);color:var(--accent)}
-.box.bad{background:var(--bad-soft);color:var(--bad)} .box.ok{background:var(--ok-soft);color:var(--ok)}
-.box ul{margin:4px 0 0;padding-left:18px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
-.kv span:nth-child(odd){color:var(--muted)}
-.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
-dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);padding:0;width:min(640px,94vw)}
-dialog::backdrop{background:rgba(0,0,0,.35)}
-dialog .hd{padding:14px 18px;border-bottom:1px solid var(--line);font-weight:600;display:flex}
-dialog .bd{padding:14px 18px;max-height:70vh;overflow:auto}
-dialog .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
-.seg{display:flex;gap:6px}
-.seg label{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px}
-.seg input{width:auto;margin-right:6px}
-.hint{font-size:12px;color:var(--muted)}
 a{color:var(--accent)}
-#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;display:none;z-index:9;max-width:80vw}
-.hist td{border-top:1px solid var(--line);font-size:12px;padding:5px 4px}
-@media (max-width:1100px){ main{grid-template-columns:240px 1fr} #viewer{display:none} }
-@media (max-width:700px){ main{grid-template-columns:1fr} #list{max-height:35vh} .grid{grid-template-columns:1fr} }
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── sidebar ── */
+#side{width:232px;flex:none;background:var(--side);color:var(--side-text);display:flex;flex-direction:column;padding:14px 10px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 18px}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#3b6cf0,#7a5af8);display:grid;place-items:center;color:#fff}
+.brand b{display:block;color:#fff;font-size:15px}
+.brand span{font-size:12px;color:var(--side-muted)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:11px;border:0;background:transparent;color:var(--side-text);padding:9px 10px;border-radius:8px;cursor:pointer;text-align:left;font-size:14px}
+.nav button:hover{background:var(--side-2);color:#fff}
+.nav button.on{background:var(--side-2);color:#fff;box-shadow:inset 3px 0 0 #6d93ff}
+.nav .badge{margin-left:auto;background:#e5484d;color:#fff;border-radius:99px;font-size:11px;padding:0 7px;min-width:20px;text-align:center}
+.nav .badge.blue{background:#3b6cf0}
+.side-foot{margin-top:auto;background:var(--side-2);border-radius:10px;padding:11px 12px;font-size:12px}
+.side-foot .row{display:flex;align-items:center;gap:7px;color:#fff;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:#7f8fb0;flex:none}
+.dot.on{background:#3ccf8e;box-shadow:0 0 0 3px rgba(60,207,142,.18)} .dot.off{background:#ff5d5d;box-shadow:0 0 0 3px rgba(255,93,93,.18)}
+.side-foot select{width:100%;margin:8px 0 6px;background:#0b1428;border:1px solid #2a3a62;color:#fff;border-radius:7px;padding:6px 8px;font-size:12px}
+.side-foot .meta{display:flex;justify-content:space-between;color:var(--side-muted)}
+.side-foot button{background:none;border:0;color:#9db7ff;cursor:pointer;padding:0;font-size:12px}
+
+/* ── main ── */
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:14px 22px;background:var(--panel);border-bottom:1px solid var(--line);min-height:62px}
+.top h1{font-size:18px;margin:0;font-weight:650}
+.top .sub{color:var(--muted);font-size:13px}
+.spacer{flex:1}
+.page{display:none;flex:1;min-height:0;overflow:auto}
+.page.on{display:flex;flex-direction:column}
+.pad{padding:18px 22px}
+
+/* ── controls ── */
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 13px;cursor:pointer;white-space:nowrap;box-shadow:var(--shadow);font-weight:500}
+.btn:hover{border-color:var(--faint)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;box-shadow:none}
+.btn.ghost:hover{background:var(--panel2)}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.btn svg.i{width:16px;height:16px}
+input,select,textarea{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 10px;width:100%;outline:none;transition:border-color .12s, box-shadow .12s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring)}
+input.missing{border-color:var(--bad);background:var(--bad-soft);box-shadow:0 0 0 3px rgba(209,47,47,.10)}
+input.okay{border-color:var(--ok)}
+label.f{display:block}
+label.f > span{display:block;font-size:12px;color:var(--muted);margin-bottom:3px;font-weight:500}
+.chk{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:13px;white-space:nowrap}
+.chk input{width:auto}
+.switch{position:relative;width:34px;height:19px;flex:none}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch i{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:.15s}
+.switch i:after{content:"";position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch input:checked + i{background:var(--accent)}
+.switch input:checked + i:after{transform:translateX(15px)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 14px}
+.full{grid-column:1/-1}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.card > .hd{padding:13px 16px;border-bottom:1px solid var(--line2);font-weight:600;display:flex;align-items:center;gap:8px}
+.card > .bd{padding:14px 16px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--panel2);color:var(--muted);border:1px solid var(--line2);white-space:nowrap}
+.pill.blue{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.green{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.pill.red{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.pill.amber{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.hint{font-size:12px;color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:40px 18px}
+.alert{border-radius:9px;padding:10px 12px;font-size:13px;margin:0 0 10px;display:flex;gap:10px;align-items:flex-start}
+.alert svg.i{margin-top:1px}
+.alert.red{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad-line)}
+.alert.amber{background:var(--warn-soft);color:var(--warn)}
+.alert.green{background:var(--ok-soft);color:var(--ok)}
+.alert.blue{background:var(--accent-soft);color:var(--accent)}
+.alert ul{margin:4px 0 0;padding-left:18px}
+.alert .grow{flex:1}
+table.t{width:100%;border-collapse:collapse}
+table.t th{font-size:12px;color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+table.t td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+table.t tr:hover td{background:var(--panel2)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── bills page ── */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 22px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;box-shadow:var(--shadow);text-align:left;transition:.12s}
+.stat:hover{border-color:var(--faint)}
+.stat.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring)}
+.stat small{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.stat b{display:block;font-size:24px;margin-top:2px;font-weight:650}
+.stat.red b{color:var(--bad)} .stat.green b{color:var(--ok)} .stat.blue b{color:var(--accent)}
+.actionbar{display:flex;gap:8px;align-items:center;padding:14px 22px;flex-wrap:wrap}
+.actionbar .sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.work{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 560px;gap:0;margin:0 22px 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.work > div{min-height:0;overflow:auto}
+#listPane{border-right:1px solid var(--line);display:flex;flex-direction:column}
+.listtools{padding:10px;border-bottom:1px solid var(--line2);display:flex;gap:6px;position:sticky;top:0;background:var(--panel);z-index:2}
+.listtools input{padding:6px 10px 6px 30px;background:var(--panel2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2398a2b3' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3-3'/%3E%3C/svg%3E") no-repeat 9px center}
+.doc{display:flex;gap:9px;padding:11px 12px;border-bottom:1px solid var(--line2);cursor:pointer;position:relative}
+.doc:hover{background:var(--panel2)}
+.doc.sel{background:var(--accent-soft)}
+.doc.sel:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+.doc input[type=checkbox]{width:auto;margin-top:3px}
+.doc .t1{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc .t2{font-size:12px;color:var(--muted);margin:1px 0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc .tags{display:flex;gap:5px;flex-wrap:wrap}
+.doc .x{opacity:0;border:0;background:none;color:var(--faint);cursor:pointer;padding:2px;align-self:flex-start}
+.doc:hover .x{opacity:1}
+.doc .x:hover{color:var(--bad)}
+.dropzone{margin:10px;border:2px dashed var(--line);border-radius:10px;padding:16px 10px;text-align:center;color:var(--muted);font-size:12.5px;cursor:pointer;transition:.12s}
+.dropzone:hover,.dropzone.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+#viewPane{background:var(--panel2);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.viewtools{display:flex;gap:4px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line2);background:var(--panel);position:sticky;top:0;z-index:2}
+.viewtools .hint{margin-left:6px}
+.pages{padding:14px;text-align:center;flex:1}
+.pages img{display:block;margin:0 auto 14px;max-width:100%;border-radius:4px;box-shadow:0 2px 10px rgba(16,24,40,.15);background:#fff;transform-origin:center top;transition:width .15s}
+.rows{padding:14px}
+.rows table{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#editPane{padding:16px 18px}
+.edhead{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.edhead h2{font-size:16px;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h3.sec{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px;font-weight:650;display:flex;align-items:center;gap:8px}
+h3.sec .line{flex:1;height:1px;background:var(--line2)}
+.entries{width:100%;border-collapse:separate;border-spacing:0 6px}
+.entries td{vertical-align:top;padding:0 3px}
+.entries .lab{font-size:11.5px;color:var(--faint);margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.entries .miss{color:var(--bad);font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.entries select{padding:7px 6px}
+.entries .amt input{text-align:right;font-variant-numeric:tabular-nums}
+.totals{display:flex;gap:18px;justify-content:flex-end;align-items:center;padding:10px 4px 0;border-top:1px solid var(--line2);margin-top:6px;font-size:13px;font-variant-numeric:tabular-nums}
+.totals .bad{color:var(--bad);font-weight:700} .totals .good{color:var(--ok);font-weight:700}
+.edactions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;align-items:center}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+details.more{margin-top:10px;border:1px solid var(--line2);border-radius:9px;padding:0 12px}
+details.more summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:13px}
+details.more[open] summary{border-bottom:1px solid var(--line2);margin-bottom:10px}
+
+/* ── masters ── */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 22px;background:var(--panel)}
+.tabs button{border:0;background:none;padding:12px 14px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:7px;align-items:center}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs .count{font-size:11px;background:var(--panel2);border-radius:99px;padding:0 7px;color:var(--muted)}
+.mgrid{display:grid;grid-template-columns:440px 1fr;gap:18px;padding:18px 22px;align-items:start}
+.mlist{max-height:calc(100vh - 210px);overflow:auto}
+.gst-ok{color:var(--ok);font-size:12px} .gst-bad{color:var(--bad);font-size:12px}
+
+/* ── excel ── */
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bigdrop{border:2px dashed var(--line);border-radius:14px;padding:38px 20px;text-align:center;cursor:pointer;background:var(--panel);transition:.12s}
+.bigdrop:hover,.bigdrop.over{border-color:var(--accent);background:var(--accent-soft)}
+.bigdrop svg.i{width:40px;height:40px;color:var(--accent);stroke-width:1.5}
+.cols{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 12px}
+.cols code{font-size:11.5px;background:var(--panel2);border:1px solid var(--line2);padding:2px 7px;border-radius:5px}
+
+/* ── drawer, toast ── */
+#scrim{position:fixed;inset:0;background:rgba(10,15,30,.35);display:none;z-index:20}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--panel);box-shadow:var(--shadow-lg);transform:translateX(105%);transition:transform .2s;z-index:21;display:flex;flex-direction:column}
+#drawer.on{transform:none}
+#drawer.wide{width:min(780px,100vw)}
+#drawer .dh{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+#drawer .dh h2{margin:0;font-size:16px;flex:1}
+#drawer .db{padding:16px 18px;overflow:auto;flex:1}
+#drawer .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+#toasts{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:30;max-width:min(420px,90vw)}
+.toast{background:#18202f;color:#fff;padding:10px 14px;border-radius:9px;font-size:13px;box-shadow:var(--shadow-lg);display:flex;gap:9px;align-items:flex-start;animation:tin .18s ease-out}
+.toast.ok{background:#0f6e4f} .toast.bad{background:#b42323}
+@keyframes tin{from{transform:translateY(8px);opacity:0}}
+.kbd{font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--muted);background:var(--panel2)}
+@media (max-width:1400px){ .work{grid-template-columns:270px minmax(0,1fr) 500px} }
+@media (max-width:1180px){ .work{grid-template-columns:260px 1fr} #viewPane{display:none} .stats{grid-template-columns:repeat(3,1fr)} .mgrid{grid-template-columns:1fr} }
+@media (max-width:760px){ body{flex-direction:column;overflow:auto} #side{width:100%;flex-direction:row;flex-wrap:wrap;padding:8px} .nav{flex-direction:row;flex-wrap:wrap} .side-foot,.brand span{display:none} .work{grid-template-columns:1fr;margin:0 10px 10px} .stats{grid-template-columns:repeat(2,1fr);padding:10px} .grid2,.grid3,.xgrid{grid-template-columns:1fr} .pad,.actionbar{padding:10px} }
 </style>
 </head>
 <body>
-<header>
-  <h1>AI Bill Scanner → Tally</h1>
-  <span class="pill" title="TallyPrime XML server"><span class="dot" id="tdot"></span><span id="tstat">Tally…</span></span>
-  <select id="company" style="width:auto;min-width:200px" title="Tally company the vouchers go into"></select>
-  <button class="ghost" id="btnLedgers" title="Re-read ledgers from Tally">↻ Ledgers</button>
-  <span class="hint" id="ledgerCount"></span>
-  <span class="spacer"></span>
-  <button id="btnHistory">History</button>
-  <button id="btnSettings">Settings</button>
-</header>
 
-<div class="toolbar">
-  <button class="primary" id="btnUpload">＋ Add bills</button>
-  <input type="file" id="file" multiple accept=".jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.pdf,.zip" hidden>
-  <button id="btnScanAll">Scan all new</button>
-  <button class="primary" id="btnPush" disabled>Push selected to Tally</button>
-  <button id="btnXml" disabled title="Download Tally import XML for the selected bills">Download XML</button>
-  <label class="chk" title="Optional vouchers show in Tally but do not affect the books until the customer marks them Regular (Ctrl+L)">
-    <input type="checkbox" id="optOptional"> Push as Optional (preview in Tally)</label>
-  <label class="chk"><input type="checkbox" id="optCreate"> Create missing ledgers</label>
-  <span class="spacer"></span>
-  <label class="chk"><input type="checkbox" id="selAll"> Select all ready</label>
+<!-- ═════════════ sidebar ═════════════ -->
+<aside id="side">
+  <div class="brand">
+    <div class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></div>
+    <div><b>AI Bill Scanner</b><span>Bills → TallyPrime</span></div>
+  </div>
+  <nav class="nav">
+    <button data-page="bills" class="on"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 20V9"/></svg>Bills<span class="badge" id="navBad" hidden></span></button>
+    <button data-page="excel"><svg class="i" viewBox="0 0 24 24"><path d="M4 3h11l5 5v13H4z"/><path d="m8 11 5 6M13 11l-5 6"/></svg>Excel Import</button>
+    <button data-page="masters"><svg class="i" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 13 9 5 9-5M3 18l9 5 9-5"/></svg>Masters</button>
+    <button data-page="history"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</button>
+    <button data-page="settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+  </nav>
+  <div class="side-foot">
+    <div class="row"><span class="dot" id="tdot"></span><span id="tstat">Connecting to Tally…</span></div>
+    <select id="company" title="Tally company the entries go into"></select>
+    <div class="meta"><span id="ledgerCount">—</span><button id="btnRefresh" title="Re-read ledgers and masters from Tally">↻ Refresh</button></div>
+  </div>
+</aside>
+
+<!-- ═════════════ main ═════════════ -->
+<div id="main">
+  <div class="top">
+    <div><h1 id="pageTitle">Bills</h1><div class="sub" id="pageSub">Scan bills, check them, push them into Tally</div></div>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="btnTheme" title="Light / dark"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+
+  <!-- ─────────── BILLS ─────────── -->
+  <section class="page on" id="page-bills">
+    <div class="stats" id="stats"></div>
+    <div class="actionbar">
+      <button class="btn primary" id="btnAdd"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add bills</button>
+      <input type="file" id="fileBills" multiple accept=".jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.pdf,.zip" hidden>
+      <button class="btn" id="btnScanAll"><svg class="i" viewBox="0 0 24 24"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M7 12h10"/></svg>Scan all new</button>
+      <button class="btn" id="btnSamples" title="Add the sample bills and Excel files to try the app"><svg class="i" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3"/></svg>Load sample bills</button>
+      <span class="sep"></span>
+      <button class="btn primary" id="btnPush" disabled><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Push to Tally</span></button>
+      <button class="btn" id="btnXml" disabled><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>XML</button>
+      <span class="spacer"></span>
+      <label class="chk" title="Optional vouchers wait in Tally until accepted with Ctrl+L"><span class="switch"><input type="checkbox" id="optOptional"><i></i></span>Push as Optional</label>
+      <label class="chk" title="Create ledgers that are missing in Tally automatically while pushing"><span class="switch"><input type="checkbox" id="optCreate"><i></i></span>Auto-create ledgers</label>
+    </div>
+    <div class="work">
+      <div id="listPane">
+        <div class="listtools"><input id="search" placeholder="Search party, bill no…"><label class="chk" title="Select all ready"><input type="checkbox" id="selAll"></label></div>
+        <div class="dropzone" id="drop">Drop bills here · JPG, PNG, PDF, ZIP<br><span class="hint">Excel / CSV? Use Excel Import</span></div>
+        <div id="docs"></div>
+      </div>
+      <div id="viewPane"><div class="empty">Select a bill to see it here.</div></div>
+      <div id="editPane"><div class="empty" id="welcome"></div></div>
+    </div>
+  </section>
+
+  <!-- ─────────── EXCEL ─────────── -->
+  <section class="page" id="page-excel">
+    <div class="pad">
+      <div class="bigdrop" id="xdrop">
+        <svg class="i" viewBox="0 0 24 24"><path d="M4 3h11l5 5v13H4z"/><path d="M15 3v5h5M12 18v-7M9 14l3-3 3 3"/></svg>
+        <h2 style="margin:10px 0 4px">Drop an Excel or CSV file</h2>
+        <div class="hint">.xlsx or .csv · your own column names are fine, they are matched automatically · no AI needed</div>
+        <input type="file" id="fileExcel" multiple accept=".xlsx,.csv,.txt" hidden>
+      </div>
+      <div id="xresult" style="margin-top:16px"></div>
+      <div class="xgrid" style="margin-top:16px">
+        <div class="card"><div class="hd">1 · Bill register <span class="pill blue">Purchase · Sales · Notes</span></div><div class="bd">
+          <div class="hint">One row per bill. A bill with two GST rates is two rows with the same Party + Bill No. Leave CGST/SGST/IGST blank to have them worked out from GST % and the GSTIN state.</div>
+          <div class="cols"><code>Date</code><code>Voucher Type</code><code>Party</code><code>Party GSTIN</code><code>Bill No</code><code>Taxable</code><code>GST %</code><code>CGST</code><code>SGST</code><code>IGST</code><code>Round Off</code><code>Total</code><code>Ledger</code><code>Narration</code></div>
+          <a class="btn sm" href="/api/import/template/bills"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download template</a>
+        </div></div>
+        <div class="card"><div class="hd">2 · Ledger lines <span class="pill blue">Journal · Payment · Receipt · Contra</span></div><div class="bd">
+          <div class="hint">One row per ledger line. Rows with the same Voucher No make one voucher; debits must equal credits. Bill Ref adjusts a party's bill (Agst Ref for payments and receipts).</div>
+          <div class="cols"><code>Voucher No</code><code>Date</code><code>Voucher Type</code><code>Ledger</code><code>Debit</code><code>Credit</code><code>Bill Ref</code><code>Narration</code></div>
+          <a class="btn sm" href="/api/import/template/ledger"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download template</a>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── MASTERS ─────────── -->
+  <section class="page" id="page-masters">
+    <div class="tabs" id="mtabs">
+      <button data-tab="ledger" class="on">Ledgers <span class="count" id="cLed">0</span></button>
+      <button data-tab="group">Groups <span class="count" id="cGrp">0</span></button>
+      <button data-tab="stock_item">Stock Items <span class="count" id="cItm">0</span></button>
+      <button data-tab="unit">Units <span class="count" id="cUnit">0</span></button>
+    </div>
+    <div class="mgrid">
+      <div class="card"><div class="hd" id="mFormTitle">Create ledger in Tally</div><div class="bd" id="mForm"></div></div>
+      <div class="card"><div class="hd"><span id="mListTitle">Ledgers in Tally</span><span class="spacer"></span>
+        <select id="mGroupFilter" style="width:200px;padding:5px 8px"></select>
+        <input id="mSearch" placeholder="Search…" style="width:200px;padding:5px 9px"></div>
+        <div class="mlist" id="mList"></div></div>
+    </div>
+  </section>
+
+  <!-- ─────────── HISTORY ─────────── -->
+  <section class="page" id="page-history">
+    <div class="pad">
+      <div class="card"><div class="hd">Pushed to Tally<span class="spacer"></span><input id="hSearch" placeholder="Search…" style="width:240px;padding:5px 9px"></div>
+        <div style="overflow:auto"><table class="t"><thead><tr><th>When</th><th>Company</th><th>Type</th><th>Party</th><th>Bill / Ref</th><th class="num">Amount</th><th>Mode</th><th>Source</th></tr></thead><tbody id="histBody"></tbody></table></div></div>
+    </div>
+  </section>
+
+  <!-- ─────────── SETTINGS ─────────── -->
+  <section class="page" id="page-settings">
+    <div class="pad" style="max-width:980px">
+      <div class="card"><div class="hd">AI that reads the bills</div><div class="bd">
+        <div class="grid2">
+          <label class="f"><span>Main AI</span><select id="sProvider"><option value="gemini">Google Gemini (free tier available)</option><option value="claude">Anthropic Claude (paid, very accurate)</option></select></label>
+          <label class="f"><span>Model (blank = automatic)</span><input id="sModel" list="dlModels" placeholder="automatic"><datalist id="dlModels"></datalist></label>
+          <label class="f"><span>Gemini API key <span id="bkGemini"></span> · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></span><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></label>
+          <label class="f"><span>Claude API key <span id="bkClaude"></span> · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></span><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></label>
+          <label class="f"><span>Gemini requests per minute</span><input id="sRpm" type="number" min="0" max="1000"></label>
+          <div class="hint" style="align-self:end">Free Gemini key: 5. Paid key: 0 (no limit). Fill both keys: if one AI is busy or out of quota, the other reads the bill.</div>
+        </div>
+        <p class="hint" style="margin:12px 0 0">Keys are stored only on this PC (<span id="dataDir"></span>) and sent only to the AI provider.</p>
+      </div></div>
+      <div class="card" style="margin-top:16px"><div class="hd">Tally</div><div class="bd">
+        <div class="grid2">
+          <label class="f"><span>Tally URL</span><input id="sTallyUrl" placeholder="http://localhost:9000"></label>
+          <label class="f"><span>Your company GSTIN (tells purchase from sales)</span><input id="sOwnGstin" maxlength="15" style="text-transform:uppercase"></label>
+          <label class="f"><span>Default purchase ledger</span><input id="sDefPurchase" list="dlLedgers"></label>
+          <label class="f"><span>Default sales ledger</span><input id="sDefSales" list="dlLedgers"></label>
+          <label class="f"><span>Round-off ledger</span><input id="sDefRound" list="dlLedgers"></label>
+          <label class="f"><span>Freight / other charges ledger</span><input id="sDefFreight" list="dlLedgers"></label>
+          <label class="f"><span>Voucher type used for Purchase</span><input id="sVtPurchase" list="dlVtypes" placeholder="Purchase"></label>
+          <label class="f"><span>Voucher type used for Sales</span><input id="sVtSales" list="dlVtypes" placeholder="Sales"></label>
+        </div>
+        <p class="hint" style="margin:12px 0 0">TallyPrime: <b>F1 → Settings → Connectivity → TallyPrime acts as Server</b>, port 9000.</p>
+      </div></div>
+      <div style="margin-top:16px;display:flex;gap:8px"><button class="btn primary" id="sSave">Save settings</button><span class="hint" style="align-self:center">AI Bill Scanner <span id="ver"></span></span></div>
+    </div>
+  </section>
 </div>
 
-<main>
-  <section class="col" id="list">
-    <div class="drop" id="drop">Drop bills here<br><span class="hint">JPG, PNG, PDF or ZIP · PDFs are converted to JPG pages</span></div>
-    <div id="docs"></div>
-  </section>
-  <section class="col" id="viewer"><div class="empty">Select a bill to see it here.<br><span class="hint">Click the image to zoom.</span></div></section>
-  <section class="col" id="editor"><div class="empty">
-    <p><b>How it works</b></p>
-    <p>1. Add bills (photos, PDFs or a ZIP).<br>2. Scan — AI reads each bill and builds a Tally voucher using your company's ledgers.<br>3. Check the voucher next to the bill.<br>4. Push — it lands in Tally as an <b>Optional voucher</b>.</p>
-    <p class="hint">In TallyPrime, open <b>Day Book</b> (or Display More Reports → Exception Reports → Optional Vouchers), open the entry, check it and press <b>Ctrl+L</b> to make it Regular. Until then it does not affect your books.</p>
-  </div></section>
-</main>
+<datalist id="dlLedgers"></datalist><datalist id="dlGroups"></datalist><datalist id="dlVtypes"></datalist>
+<datalist id="dlUnits"></datalist><datalist id="dlStockGroups"></datalist><datalist id="dlStates"></datalist>
 
-<datalist id="dlLedgers"></datalist>
-<datalist id="dlVtypes"></datalist>
-
-<dialog id="dlgSettings">
-  <div class="hd">Settings</div>
-  <div class="bd">
-    <h3 style="margin-top:0">AI that reads the bills</h3>
-    <div class="seg">
-      <label><input type="radio" name="provider" value="gemini">Google Gemini<br><span class="hint">Free tier — good for most bills</span></label>
-      <label><input type="radio" name="provider" value="claude">Anthropic Claude<br><span class="hint">Paid — very accurate</span></label>
-    </div>
-    <div class="grid" style="margin-top:10px">
-      <div class="f full" id="fGemini"><label>Gemini API key<span id="bkGemini"></span> · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></label><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></div>
-      <div class="f full" id="fClaude"><label>Claude API key<span id="bkClaude"></span> · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></label><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
-      <div class="f"><label>Model (blank = automatic)</label><input id="sModel" list="dlModels" placeholder="default"><datalist id="dlModels"></datalist></div>
-      <div class="f"><label>Gemini requests per minute</label><input id="sRpm" type="number" min="0" max="1000"><span class="hint">Free key: 5. Paid key: 0 (no limit).</span></div>
-    </div>
-    <p class="hint">Tip: fill in both keys. If the chosen AI is busy, the scanner reads the bill with the other one.</p>
-    <p class="hint">Keys are saved only on this PC (<span id="dataDir"></span>) and sent only to the AI provider you choose.</p>
-    <h3>Tally</h3>
-    <div class="grid">
-      <div class="f"><label>Tally URL</label><input id="sTallyUrl" placeholder="http://localhost:9000"></div>
-      <div class="f"><label>Your company GSTIN (decides purchase vs sales)</label><input id="sOwnGstin" maxlength="15"></div>
-      <div class="f"><label>Default purchase ledger</label><input id="sDefPurchase" list="dlLedgers"></div>
-      <div class="f"><label>Default sales ledger</label><input id="sDefSales" list="dlLedgers"></div>
-      <div class="f"><label>Round-off ledger</label><input id="sDefRound" list="dlLedgers"></div>
-      <div class="f"><label>Freight / other charges ledger</label><input id="sDefFreight" list="dlLedgers"></div>
-      <div class="f"><label>Voucher type for Purchase</label><input id="sVtPurchase" list="dlVtypes" placeholder="Purchase"></div>
-      <div class="f"><label>Voucher type for Sales</label><input id="sVtSales" list="dlVtypes" placeholder="Sales"></div>
-    </div>
-    <p class="hint">TallyPrime must be open with <b>F1 → Settings → Connectivity → TallyPrime acts as Server</b>, port 9000.</p>
-  </div>
-  <div class="ft"><button id="sCancel">Cancel</button><button class="primary" id="sSave">Save</button></div>
-</dialog>
-
-<dialog id="dlgHistory" style="width:min(900px,96vw)">
-  <div class="hd">Pushed to Tally<span class="spacer"></span><button class="ghost" onclick="dlgHistory.close()">✕</button></div>
-  <div class="bd"><table class="hist"><thead><tr><th>When</th><th>Company</th><th>Type</th><th>Party</th><th>Bill no.</th><th style="text-align:right">Amount</th><th>Mode</th><th>File</th></tr></thead><tbody id="histBody"></tbody></table></div>
-</dialog>
-
-<div id="toast"></div>
+<div id="scrim"></div>
+<aside id="drawer"><div class="dh"><h2 id="drTitle"></h2><button class="btn ghost sm" id="drClose">✕</button></div><div class="db" id="drBody"></div><div class="df" id="drFoot"></div></aside>
+<div id="toasts"></div>
 
 <script>
-const $ = s => document.querySelector(s);
+/* ═════════════ helpers ═════════════ */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = n => (Number(n)||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
-const PARENTS = ["Sundry Creditors","Sundry Debtors","Purchase Accounts","Sales Accounts","Duties & Taxes","Direct Expenses","Indirect Expenses","Indirect Incomes","Current Liabilities"];
-
-let S = {settings:{}, info:{}, docs:[], sel:null, ledgers:[], ledgerSet:new Set(), checked:new Set(), busy:false};
-
+const dmy = iso => iso && /^\d{4}-\d\d-\d\d$/.test(iso) ? iso.split("-").reverse().join("-") : (iso||"");
+const store = { get(k,d){ try { const v=localStorage.getItem(k); return v==null?d:v; } catch(_){ return d; } }, set(k,v){ try { localStorage.setItem(k,v); } catch(_){} } };
+const I = {
+  warn:'<svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+  x:'<svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  ok:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
+  plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  info:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>',
+  img:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>',
+  xls:'<svg class="i" viewBox="0 0 24 24"><path d="M4 3h11l5 5v13H4z"/><path d="m8 11 5 6M13 11l-5 6"/></svg>',
+};
 async function api(path, opt={}) {
   const o = {...opt, headers:{...(opt.headers||{})}};
   if (o.body && !(o.body instanceof FormData)) { o.headers["Content-Type"]="application/json"; o.body=JSON.stringify(o.body); }
   const r = await fetch(path, o);
   const ct = r.headers.get("content-type")||"";
   const data = ct.includes("json") ? await r.json() : await r.blob();
-  if (!r.ok || data.ok === false) throw new Error(data.error || ("HTTP "+r.status));
+  if (!r.ok || data.ok === false) { const e = new Error(data.error || ("HTTP "+r.status)); e.data = data; throw e; }
   return data;
 }
-function toast(msg, ms=3500){ const t=$("#toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", ms); }
+function toast(msg, kind="", ms=4000){
+  const t=document.createElement("div"); t.className="toast "+kind;
+  t.innerHTML=(kind==="ok"?I.ok:kind==="bad"?I.warn:I.info)+`<div>${esc(msg)}</div>`;
+  $("#toasts").appendChild(t); setTimeout(()=>t.remove(), ms);
+  while ($("#toasts").children.length>4) $("#toasts").firstChild.remove();
+}
+const STATES = {"01":"Jammu & Kashmir","02":"Himachal Pradesh","03":"Punjab","04":"Chandigarh","05":"Uttarakhand","06":"Haryana","07":"Delhi","08":"Rajasthan","09":"Uttar Pradesh","10":"Bihar","11":"Sikkim","12":"Arunachal Pradesh","13":"Nagaland","14":"Manipur","15":"Mizoram","16":"Tripura","17":"Meghalaya","18":"Assam","19":"West Bengal","20":"Jharkhand","21":"Odisha","22":"Chhattisgarh","23":"Madhya Pradesh","24":"Gujarat","26":"Dadra & Nagar Haveli and Daman & Diu","27":"Maharashtra","29":"Karnataka","30":"Goa","31":"Lakshadweep","32":"Kerala","33":"Tamil Nadu","34":"Puducherry","35":"Andaman & Nicobar Islands","36":"Telangana","37":"Andhra Pradesh","38":"Ladakh","97":"Other Territory"};
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
+const PARTY_GROUPS = ["Sundry Creditors","Sundry Debtors"];
 
-// ── boot ─────────────────────────────────────────────────────
+/* ═════════════ state ═════════════ */
+const S = { settings:{}, info:{}, docs:[], sel:null, ledgers:[], lmap:new Map(), groups:[], gparents:{}, vtypes:[],
+  masters:{stock_items:[],stock_groups:[],units:[]}, filter:"all", q:"", checked:new Set(), busy:false, page:"bills", zoom:1, mtab:"ledger" };
+const haveLedgers = () => S.ledgers.length > 0;
+const exists = n => S.lmap.has((n||"").trim().toLowerCase());
+function chain(g){ const out=[]; while (g && !out.includes(g) && out.length<25){ out.push(g); g=S.gparents[g]; } return out; }
+const under = (g, ...prim) => chain(g).some(x => prim.includes(x)) || prim.includes(g);
+
+/* ═════════════ theme & routing ═════════════ */
+function applyTheme(t){ if (t==="auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme=t; }
+applyTheme(store.get("theme","auto"));
+$("#btnTheme").onclick = () => {
+  const dark = document.documentElement.dataset.theme==="dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  const t = dark ? "light" : "dark"; applyTheme(t); store.set("theme", t);
+};
+const PAGES = { bills:["Bills","Scan bills, check them, push them into Tally"], excel:["Excel Import","Bring bills and vouchers in from Excel or CSV — no AI needed"],
+  masters:["Masters","Create ledgers, groups, stock items and units directly in Tally"], history:["History","Everything pushed to Tally from this PC"], settings:["Settings","AI keys, Tally connection and defaults"] };
+function go(p){
+  S.page=p; $$(".nav button").forEach(b=>b.classList.toggle("on", b.dataset.page===p));
+  $$(".page").forEach(x=>x.classList.toggle("on", x.id==="page-"+p));
+  $("#pageTitle").textContent=PAGES[p][0]; $("#pageSub").textContent=PAGES[p][1];
+  if (p==="history") renderHistory(); if (p==="masters") renderMasters(); if (p==="settings") fillSettings();
+}
+$$(".nav button").forEach(b=>b.onclick=()=>go(b.dataset.page));
+
+/* ═════════════ boot & Tally ═════════════ */
 async function boot(){
-  S.info = await api("/api/info");
+  S.info = await api("/api/info"); $("#ver").textContent = "v"+S.info.version;
   S.settings = await api("/api/settings");
-  $("#optOptional").checked = S.settings.push_as_optional;
-  $("#optCreate").checked = S.settings.create_missing_ledgers;
+  $("#optOptional").checked = S.settings.push_as_optional; $("#optCreate").checked = S.settings.create_missing_ledgers;
+  renderWelcome();
   await refreshDocs();
   await checkTally();
   setInterval(checkTally, 30000);
-  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) openSettings();
+  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) toast("Add a Gemini or Claude key in Settings to scan bills. Excel import works without one.", "", 8000);
 }
-
 async function checkTally(){
   try {
     const st = await api("/api/tally/status");
     $("#tdot").className = "dot " + (st.online ? "on":"off");
     $("#tstat").textContent = st.online ? "Tally connected" : "Tally offline";
-    const sel = $("#company"); const cur = S.settings.company;
+    const cur = S.settings.company;
     const list = [...new Set([...(st.companies||[]), ...(cur?[cur]:[])])];
     const html = `<option value="">— choose company —</option>` + list.map(c=>`<option ${c===cur?"selected":""}>${esc(c)}</option>`).join("");
-    if (sel.innerHTML !== html) sel.innerHTML = html;
-    if (st.online && cur && !S.ledgers.length) loadLedgers();
-    if (st.online && !cur && st.companies.length===1) { sel.value = st.companies[0]; sel.onchange(); }
+    if ($("#company").innerHTML !== html) $("#company").innerHTML = html;
+    if (st.online && cur && !haveLedgers()) loadLedgers();
+    if (st.online && !cur && st.companies.length===1) { $("#company").value = st.companies[0]; $("#company").onchange(); }
   } catch(e){ $("#tdot").className="dot off"; $("#tstat").textContent="Tally offline"; }
 }
-
 async function loadLedgers(refresh){
   if (!S.settings.company) return;
   try {
     const r = await api(`/api/tally/ledgers?company=${encodeURIComponent(S.settings.company)}${refresh?"&refresh=1":""}`);
-    S.ledgers = r.ledgers; S.ledgerSet = new Set(r.ledgers.map(l=>l.name.toLowerCase()));
+    S.ledgers = r.ledgers; S.lmap = new Map(r.ledgers.map(l=>[l.name.toLowerCase(), l]));
+    S.groups = r.groups; S.gparents = r.group_parents||{}; S.vtypes = r.voucher_types;
     $("#dlLedgers").innerHTML = r.ledgers.map(l=>`<option value="${esc(l.name)}">${esc(l.parent)}</option>`).join("");
+    $("#dlGroups").innerHTML = r.groups.map(g=>`<option value="${esc(g)}">`).join("");
     $("#dlVtypes").innerHTML = r.voucher_types.map(v=>`<option value="${esc(v.name)}">${esc(v.parent)}</option>`).join("");
-    $("#ledgerCount").textContent = `${r.ledgers.length} ledgers`;
-    renderEditor();
-  } catch(e){ toast("Ledgers: "+e.message); }
+    $("#ledgerCount").textContent = `${r.ledgers.length.toLocaleString("en-IN")} ledgers`;
+    refreshAll();
+  } catch(e){ toast("Ledgers: "+e.message, "bad"); }
 }
-
+async function loadMasters(){
+  if (!S.settings.company) return;
+  try {
+    S.masters = await api(`/api/tally/masters?company=${encodeURIComponent(S.settings.company)}`);
+    $("#dlUnits").innerHTML = S.masters.units.map(u=>`<option value="${esc(u.name)}">`).join("");
+    $("#dlStockGroups").innerHTML = S.masters.stock_groups.map(g=>`<option value="${esc(g.name)}">`).join("");
+    if (S.page==="masters") renderMasters();
+  } catch(e){ toast("Masters: "+e.message, "bad"); }
+}
+$("#dlStates").innerHTML = Object.values(STATES).map(s=>`<option value="${esc(s)}">`).join("");
 $("#company").onchange = async e => {
   S.settings = await api("/api/settings",{method:"POST", body:{company:e.target.value}});
-  S.ledgers=[]; S.ledgerSet=new Set(); $("#ledgerCount").textContent="";
-  await loadLedgers();
-  // Re-map scanned drafts that were never pushed to the new company's ledgers
-  for (const d of S.docs.filter(d=>d.bill && d.status!=="pushed")) {
+  S.ledgers=[]; S.lmap=new Map(); $("#ledgerCount").textContent="—";
+  await loadLedgers(); loadMasters();
+  for (const d of S.docs.filter(d=>d.bill && d.status!=="pushed" && d.source!=="excel")) {
     try { const r = await api(`/api/docs/${d.id}/remap`,{method:"POST"}); Object.assign(d, r.document); } catch(_){}
   }
-  renderList(); renderEditor();
+  refreshAll();
 };
-$("#btnLedgers").onclick = () => loadLedgers(true).then(()=>toast("Ledgers refreshed"));
+$("#btnRefresh").onclick = async () => { await loadLedgers(true); await loadMasters(); toast("Ledgers and masters refreshed from Tally","ok"); };
 $("#optOptional").onchange = e => api("/api/settings",{method:"POST", body:{push_as_optional:e.target.checked}}).then(s=>S.settings=s);
 $("#optCreate").onchange = e => api("/api/settings",{method:"POST", body:{create_missing_ledgers:e.target.checked}}).then(s=>S.settings=s);
+function refreshAll(){ renderStats(); renderList(); renderEditor(); if (S.page==="masters") renderMasters(); }
 
-// ── documents list ───────────────────────────────────────────
-async function refreshDocs(){ S.docs = (await api("/api/docs")).documents; renderList(); }
+/* ═════════════ missing ledgers ═════════════ */
+const NAME_GROUPS = [   // first match wins: words in a ledger name -> likely Tally group
+  [/\b(bank|hdfc|icici|sbi|axis|kotak|baroda|canara|pnb|idfc|yes bank|indusind|federal)\b/i, "Bank Accounts"],
+  [/\b(od|cc|overdraft|cash credit)\b/i, "Bank OD A/c"],
+  [/\bcash\b/i, "Cash-in-Hand"],
+  [/\b(cgst|sgst|igst|utgst|gst|cess|tds|tcs)\b/i, "Duties & Taxes"],
+  [/\b(payable|outstanding|provision for)\b/i, "Current Liabilities"],
+  [/\b(plant|machinery|machine|furniture|computer|vehicle|building|land|equipment|fixtures?)\b/i, "Fixed Assets"],
+  [/\b(capital|drawings?)\b/i, "Capital Account"],
+  [/\bloan\b/i, "Loans (Liability)"],
+  [/\b(deposit|advance)\b/i, "Loans & Advances (Asset)"],
+  [/\bsales?\b/i, "Sales Accounts"],
+  [/\bpurchases?\b/i, "Purchase Accounts"],
+  [/\b(interest received|discount received|commission received|other income|rent received)\b/i, "Indirect Incomes"],
+  [/\b(freight|carriage|wages|power|fuel|job work|dyeing)\b/i, "Direct Expenses"],
+  [/\b(salary|salaries|rent|electricity|telephone|internet|depreciation|printing|stationery|repairs?|audit|fees|insurance|travel|conveyance|office|expenses?|charges)\b/i, "Indirect Expenses"],
+];
+function guessParent(e, draft){
+  const k=e.kind||"", base=draft.voucher_base||draft.voucher_type||"Purchase", name=e.ledger||"";
+  const purch = ["Purchase","Debit Note","Payment"].includes(base);
+  if (k==="party"||(name&&name===draft.party_ledger)) return purch?"Sundry Creditors":"Sundry Debtors";
+  if (["cgst","sgst","igst","cess","tds"].includes(k)) return "Duties & Taxes";
+  if (k==="goods") return ["Purchase","Debit Note"].includes(base)?"Purchase Accounts":"Sales Accounts";
+  if (k==="roundoff") return "Indirect Expenses";
+  // The same name is the party on another bill -> it is a party
+  const asParty = S.docs.find(d=>d.draft && d.draft.party_ledger && d.draft.party_ledger.toLowerCase()===name.toLowerCase() && d.draft!==draft);
+  if (asParty) return ["Purchase","Debit Note"].includes(asParty.draft.voucher_base||asParty.draft.voucher_type)?"Sundry Creditors":"Sundry Debtors";
+  for (const [re, g] of NAME_GROUPS) if (re.test(name)) return g;
+  if (e.bill_ref) return base==="Receipt"?"Sundry Debtors":"Sundry Creditors";   // bill-wise line = party
+  if (k==="freight") return "Indirect Expenses";
+  return base==="Receipt" ? "Sundry Debtors" : base==="Payment" ? "Sundry Creditors" : "Indirect Expenses";
+}
+function specFor(name, draft){
+  const e = draft.entries.find(x=>(x.ledger||"").toLowerCase()===name.toLowerCase()) || {ledger:name};
+  const prev = (draft.new_ledgers||[]).find(n=>n.name.toLowerCase()===name.toLowerCase());
+  const isParty = name===draft.party_ledger;
+  return Object.assign({name, parent:guessParent(e,draft), gstin:isParty?draft.party_gstin:"", state:isParty?draft.party_state:"",
+    tax_head:["cgst","sgst","igst","cess","tds"].includes(e.kind)?e.kind:null}, prev||{}, {name});
+}
+function missingFor(d){
+  if (!d || !d.draft || !haveLedgers() || d.status==="pushed") return [];
+  const names = new Set(); const out=[];
+  for (const e of d.draft.entries) { const n=(e.ledger||"").trim(); if (n && !exists(n) && !names.has(n.toLowerCase())) { names.add(n.toLowerCase()); out.push(n); } }
+  return out;
+}
+function syncNewLedgers(draft){
+  draft.new_ledgers = [...new Set(draft.entries.map(e=>(e.ledger||"").trim()).filter(n=>n && !exists(n)))].map(n=>Object.assign(specFor(n,draft),{create:true}));
+}
 
-function renderList(){
-  const el = $("#docs");
-  if (!S.docs.length) { el.innerHTML = `<div class="empty">No bills yet.</div>`; updateButtons(); return; }
-  el.innerHTML = S.docs.map(d => {
-    const amt = d.bill ? `₹ ${money(d.bill.grand_total)}` : "";
-    const party = d.draft ? d.draft.party_ledger : "";
-    const label = {new:"new",scanning:"scanning…",ready:"ready",pushed:d.push&&d.push.optional?"in Tally (optional)":"in Tally",error:"error"}[d.status]||d.status;
-    return `<div class="doc ${S.sel===d.id?"sel":""}" data-id="${d.id}">
-      <input type="checkbox" ${S.checked.has(d.id)?"checked":""} ${d.draft?"":"disabled"} data-chk="${d.id}">
-      <div style="flex:1;min-width:0"><div class="nm">${esc(party || d.name.split("/").pop())}</div>
-      <div class="sub">${esc(d.bill?.invoice_number||"")} ${amt} · ${d.pages}p</div>
-      <span class="chip ${d.status}">${esc(label)}</span>
-      ${d.error?`<div class="sub" style="color:var(--bad)">${esc(d.error.slice(0,140))}</div>`:""}</div>
-      <button class="ghost" data-del="${d.id}" title="Remove">✕</button></div>`;
-  }).join("");
-  el.querySelectorAll(".doc").forEach(n => n.onclick = ev => {
-    if (ev.target.dataset.chk || ev.target.dataset.del) return;
-    select(n.dataset.id);
+/* ═════════════ bills: stats & list ═════════════ */
+function bucket(d){
+  if (d.status==="pushed") return "pushed";
+  if (d.status==="error") return "error";
+  if (!d.draft) return "new";
+  return missingFor(d).length || balanceOf(d.draft) ? "attention" : "ready";
+}
+function balanceOf(v){ const dr=v.entries.filter(e=>e.dr_cr==="Dr").reduce((s,e)=>s+(+e.amount||0),0), cr=v.entries.filter(e=>e.dr_cr==="Cr").reduce((s,e)=>s+(+e.amount||0),0); return Math.round((dr-cr)*100)/100; }
+function renderStats(){
+  const c = {all:S.docs.length, ready:0, attention:0, pushed:0, error:0, new:0};
+  S.docs.forEach(d=>c[bucket(d)]++);
+  const cards = [["all","All entries","",c.all],["ready","Ready to push","blue",c.ready],["attention","Needs attention","red",c.attention],["pushed","In Tally","green",c.pushed],["error","Errors / not scanned","",c.error+c.new]];
+  $("#stats").innerHTML = cards.map(([k,l,cls,n])=>`<button class="stat ${cls} ${S.filter===k?"on":""}" data-f="${k}"><small>${l}</small><b>${n}</b></button>`).join("");
+  $$("#stats .stat").forEach(b=>b.onclick=()=>{ S.filter = S.filter===b.dataset.f && b.dataset.f!=="all" ? "all" : b.dataset.f; renderStats(); renderList(); });
+  const bad = c.attention + c.error; $("#navBad").hidden = !bad; $("#navBad").textContent = bad;
+}
+async function refreshDocs(){ S.docs = (await api("/api/docs")).documents; renderStats(); renderList(); }
+function visibleDocs(){
+  const q = S.q.toLowerCase();
+  return S.docs.filter(d => {
+    const b = bucket(d);
+    if (S.filter!=="all" && !(S.filter===b || (S.filter==="error" && b==="new"))) return false;
+    if (!q) return true;
+    return [d.name, d.draft?.party_ledger, d.draft?.reference, d.draft?.voucher_number, d.bill?.invoice_number].join(" ").toLowerCase().includes(q);
   });
-  el.querySelectorAll("[data-chk]").forEach(n => n.onchange = () => { n.checked ? S.checked.add(n.dataset.chk) : S.checked.delete(n.dataset.chk); updateButtons(); });
-  el.querySelectorAll("[data-del]").forEach(n => n.onclick = async () => {
-    if (!confirm("Remove this bill from the list?")) return;
+}
+function renderList(){
+  const docs = visibleDocs(), el = $("#docs");
+  if (!S.docs.length) { el.innerHTML = `<div class="empty">No bills yet.<br><br><button class="btn sm" onclick="loadSamples()">Load sample bills</button></div>`; updateButtons(); return; }
+  if (!docs.length) { el.innerHTML = `<div class="empty">Nothing matches.</div>`; updateButtons(); return; }
+  el.innerHTML = docs.map(d => {
+    const b = bucket(d), miss = missingFor(d);
+    const amt = d.draft ? (d.draft.entries.find(e=>e.ledger===d.draft.party_ledger)||d.draft.entries[0]||{}).amount : d.bill?.grand_total;
+    const st = {new:["","Not scanned"],ready:["blue","Ready"],attention:["red","Needs attention"],pushed:["green",d.push&&d.push.optional?"In Tally · optional":"In Tally"],error:["red","Error"]}[b];
+    const src = d.source==="excel" ? `<span class="pill" title="From Excel">${I.xls.replace('class="i"','class="i" style="width:12px;height:12px"')} Excel</span>` : "";
+    return `<div class="doc ${S.sel===d.id?"sel":""}" data-id="${d.id}">
+      <input type="checkbox" ${S.checked.has(d.id)?"checked":""} ${d.draft&&b!=="pushed"?"":"disabled"} data-chk="${d.id}">
+      <div style="flex:1;min-width:0">
+        <div class="t1">${esc(d.draft?.party_ledger || d.name.split("/").pop())}</div>
+        <div class="t2">${esc([d.draft?.voucher_type, d.draft?.reference||d.draft?.voucher_number, d.draft?.date?dmy(d.draft.date):""].filter(Boolean).join(" · "))}${amt?` · ₹ ${money(amt)}`:""}</div>
+        <div class="tags"><span class="pill ${st[0]}">${d.status==="scanning"?"Scanning…":st[1]}</span>${miss.length?`<span class="pill red">${miss.length} not in Tally</span>`:""}${src}</div>
+      </div>
+      <button class="x" data-del="${d.id}" title="Remove from list">${I.x}</button></div>`;
+  }).join("");
+  $$("#docs .doc").forEach(n => n.onclick = ev => { if (ev.target.closest("[data-chk],[data-del]")) return; select(n.dataset.id); });
+  $$("#docs [data-chk]").forEach(n => n.onchange = () => { n.checked ? S.checked.add(n.dataset.chk) : S.checked.delete(n.dataset.chk); updateButtons(); });
+  $$("#docs [data-del]").forEach(n => n.onclick = async () => {
+    if (!confirm("Remove this entry from the list? (Nothing is changed in Tally.)")) return;
     await api(`/api/docs/${n.dataset.del}`,{method:"DELETE"});
     S.checked.delete(n.dataset.del); if (S.sel===n.dataset.del) S.sel=null;
     await refreshDocs(); renderViewer(); renderEditor();
@@ -271,202 +584,230 @@ function renderList(){
   updateButtons();
 }
 function updateButtons(){
-  for (const id of [...S.checked]) if (!S.docs.find(d=>d.id===id&&d.draft)) S.checked.delete(id);
-  $("#btnPush").disabled = $("#btnXml").disabled = !S.checked.size || S.busy;
-  $("#btnPush").textContent = S.checked.size ? `Push ${S.checked.size} to Tally` : "Push selected to Tally";
+  for (const id of [...S.checked]) { const d=S.docs.find(x=>x.id===id); if (!d||!d.draft||d.status==="pushed") S.checked.delete(id); }
+  const n = S.checked.size;
+  $("#btnPush").disabled = $("#btnXml").disabled = !n || S.busy;
+  $("#btnPush").querySelector("span").textContent = n ? `Push ${n} to Tally` : "Push to Tally";
   $("#btnScanAll").disabled = S.busy;
 }
-$("#selAll").onchange = e => { S.checked = new Set(e.target.checked ? S.docs.filter(d=>d.status==="ready").map(d=>d.id) : []); renderList(); };
-
+$("#search").oninput = e => { S.q = e.target.value; renderList(); };
+$("#selAll").onchange = e => { S.checked = new Set(e.target.checked ? S.docs.filter(d=>bucket(d)==="ready").map(d=>d.id) : []); renderList(); };
 function select(id){ S.sel=id; renderList(); renderViewer(); renderEditor(); }
 const cur = () => S.docs.find(d=>d.id===S.sel);
 
+/* ═════════════ viewer ═════════════ */
 function renderViewer(){
-  const d = cur(), v = $("#viewer");
+  const d = cur(), v = $("#viewPane");
   if (!d) { v.innerHTML = `<div class="empty">Select a bill to see it here.</div>`; return; }
-  v.innerHTML = Array.from({length:d.pages},(_,i)=>`<img src="/api/docs/${d.id}/page/${i+1}" alt="page ${i+1}">`).join("");
-  v.querySelectorAll("img").forEach(img => img.onclick = () => v.classList.toggle("zoom"));
+  if (d.source==="excel") {
+    const rows = d.rows||[], heads = [...new Set(rows.flatMap(r=>Object.keys(r)))];
+    v.innerHTML = `<div class="viewtools"><b style="font-size:13px">${I.xls} ${esc(d.file||"Excel")}</b><span class="hint">rows ${esc((d.row_numbers||[]).join(", "))}</span></div>
+      <div class="rows"><table class="t"><thead><tr>${heads.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r=>`<tr>${heads.map(h=>`<td>${esc(r[h]??"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    return;
+  }
+  v.innerHTML = `<div class="viewtools">
+      <button class="btn ghost sm" data-z="-1" title="Zoom out">−</button><button class="btn ghost sm" data-z="0" title="Fit width">Fit</button><button class="btn ghost sm" data-z="1" title="Zoom in">+</button>
+      <span class="hint">${d.pages} page${d.pages>1?"s":""} · click image to zoom</span><span class="spacer"></span>
+      <a class="btn ghost sm" href="/api/docs/${d.id}/page/1" target="_blank" title="Open full size">↗</a></div>
+    <div class="pages">${Array.from({length:d.pages},(_,i)=>`<img src="/api/docs/${d.id}/page/${i+1}" alt="page ${i+1}" style="width:${S.zoom*100}%">`).join("")}</div>`;
+  const setZ = z => { S.zoom = Math.max(.5, Math.min(3, z)); v.querySelectorAll(".pages img").forEach(i=>{ i.style.width=(S.zoom*100)+"%"; i.style.maxWidth=S.zoom>1?"none":"100%"; }); };
+  v.querySelectorAll("[data-z]").forEach(b => b.onclick = () => setZ(b.dataset.z==="0" ? 1 : S.zoom + (+b.dataset.z)*0.25));
+  v.querySelectorAll(".pages img").forEach(img => img.onclick = () => setZ(S.zoom>1 ? 1 : 1.75));
+  setZ(S.zoom);
 }
 
-// ── upload & scan ────────────────────────────────────────────
-$("#btnUpload").onclick = () => $("#file").click();
-$("#file").onchange = e => { upload(e.target.files); e.target.value=""; };
-const drop = $("#drop");
-["dragenter","dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
-["dragleave","drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t==="drop" || e.target===document.documentElement) drop.classList.remove("over"); }));
-document.addEventListener("drop", e => { if (e.dataTransfer.files.length) upload(e.dataTransfer.files); });
-drop.onclick = () => $("#file").click();
-
-async function upload(files){
+/* ═════════════ upload / samples / scan ═════════════ */
+$("#btnAdd").onclick = () => $("#fileBills").click();
+$("#drop").onclick = () => $("#fileBills").click();
+$("#fileBills").onchange = e => { uploadBills(e.target.files); e.target.value=""; };
+function wireDrop(el, fn){
+  ["dragenter","dragover"].forEach(t=>el.addEventListener(t, e=>{ e.preventDefault(); el.classList.add("over"); }));
+  ["dragleave","drop"].forEach(t=>el.addEventListener(t, e=>{ e.preventDefault(); el.classList.remove("over"); }));
+  el.addEventListener("drop", e => { if (e.dataTransfer.files.length) fn(e.dataTransfer.files); });
+}
+wireDrop($("#drop"), files => routeFiles(files));
+wireDrop($("#page-bills .work"), files => routeFiles(files));
+function routeFiles(files){
+  const xl = [...files].filter(f=>/\.(xlsx|csv|xls)$/i.test(f.name)), other = [...files].filter(f=>!/\.(xlsx|csv|xls)$/i.test(f.name));
+  if (xl.length) importExcel(xl); if (other.length) uploadBills(other);
+}
+async function uploadBills(files){
   if (!files.length) return;
   const fd = new FormData(); for (const f of files) fd.append("files", f);
-  toast("Preparing files…", 60000);
+  toast("Preparing files…");
   try {
     const r = await api("/api/upload",{method:"POST", body:fd});
-    toast(`${r.documents.length} bill(s) added` + (r.skipped.length?` · ${r.skipped.length} skipped`:""), 5000);
-    if (r.skipped.length) console.warn("Skipped:", r.skipped);
+    toast(`${r.documents.length} bill(s) added` + (r.skipped.length?` · ${r.skipped.length} skipped`:""), "ok");
     if (r.skipped.length && !r.documents.length) alert("Nothing usable found:\n" + r.skipped.join("\n"));
     await refreshDocs();
     if (r.documents.length) { select(r.documents[0].id); scanMany(r.documents.map(d=>d.id)); }
-  } catch(e){ toast("Upload failed: "+e.message, 6000); }
+  } catch(e){ toast("Upload failed: "+e.message, "bad", 7000); }
 }
-
+async function loadSamples(){
+  try {
+    const r = await api("/api/samples/load",{method:"POST"});
+    await refreshDocs();
+    const imgs = r.documents.filter(d=>d.source!=="excel").length;
+    toast(`Added ${r.documents.length} sample entries (${imgs} bills to scan, ${r.documents.length-imgs} from Excel)`, "ok", 6000);
+    const firstX = r.documents.find(d=>d.source==="excel"); if (firstX) select(firstX.id);
+  } catch(e){ toast(e.message, "bad"); }
+}
+$("#btnSamples").onclick = loadSamples;
 async function scanOne(id){
   const d = S.docs.find(x=>x.id===id); if (!d) return;
-  d.status="scanning"; d.error=""; renderList();
-  try {
-    const r = await api(`/api/docs/${id}/scan`,{method:"POST"});
-    Object.assign(d, r.document);
-    if (!d.draft.notes.some(n=>/balance/.test(n)) && !d.bill.warnings.length) S.checked.add(id);
-  } catch(e){ d.status="error"; d.error=e.message; }
-  renderList(); if (S.sel===id) renderEditor();
+  d.status="scanning"; d.error=""; renderList(); if (S.sel===id) renderEditor();
+  try { const r = await api(`/api/docs/${id}/scan`,{method:"POST"}); Object.assign(d, r.document); if (bucket(d)==="ready") S.checked.add(id); }
+  catch(e){ d.status="error"; d.error=e.message; }
+  renderStats(); renderList(); if (S.sel===id) renderEditor();
 }
 async function scanMany(ids){
-  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) { openSettings(); toast("Add an AI key first"); return; }
+  if (!S.settings.gemini_key_set && !S.settings.claude_key_set) { go("settings"); toast("Add an AI key first","bad"); return; }
   S.busy=true; updateButtons();
-  // Show pacing / rate-limit waits (free Gemini allows only a few bills per minute)
-  const poll = setInterval(async()=>{ try { const r=await api("/api/ai/status"); if (r.msg) toast(r.msg, 4000); } catch(_){} }, 2500);
-  try { for (const id of ids) await scanOne(id); }  // one at a time: friendly to free-tier rate limits
-  finally { clearInterval(poll); S.busy=false; updateButtons(); }
+  const poll = setInterval(async()=>{ try { const r=await api("/api/ai/status"); if (r.msg) toast(r.msg, "", 3500); } catch(_){} }, 3000);
+  try { for (const id of ids) await scanOne(id); } finally { clearInterval(poll); S.busy=false; updateButtons(); }
 }
 $("#btnScanAll").onclick = () => {
-  const ids = S.docs.filter(d=>d.status==="new"||d.status==="error"&&!d.draft).map(d=>d.id);
+  const ids = S.docs.filter(d=>d.pages && (d.status==="new" || (d.status==="error" && !d.draft))).map(d=>d.id);
   ids.length ? scanMany(ids) : toast("Nothing new to scan");
 };
 
-// ── editor ───────────────────────────────────────────────────
+/* ═════════════ editor ═════════════ */
+function renderWelcome(){
+  $("#welcome").innerHTML = `<div style="max-width:400px;margin:20px auto;text-align:left">
+    <h2 style="font-size:17px;margin:0 0 12px">How it works</h2>
+    <div class="kv" style="grid-template-columns:28px 1fr;gap:10px">
+      <span class="pill blue">1</span><span><b>Add bills</b> — photos, PDFs, ZIP — or import an <a href="#" onclick="go('excel');return false">Excel file</a>.</span>
+      <span class="pill blue">2</span><span><b>AI reads them</b> and builds Tally vouchers using your ledgers.</span>
+      <span class="pill red">3</span><span>Ledgers missing in Tally show in <b style="color:var(--bad)">red</b> — create them here in one click.</span>
+      <span class="pill green">4</span><span><b>Push</b> — entries land in Tally as Optional vouchers. Accept them there with <span class="kbd">Ctrl+L</span>.</span>
+    </div>
+    <p class="hint" style="margin-top:16px">Try it now: <a href="#" onclick="loadSamples();return false">load the sample bills</a>.</p>
+    <p class="hint">Keys: <span class="kbd">↑</span> <span class="kbd">↓</span> move between bills · <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> push the open bill</p></div>`;
+}
 let saveTimer;
-function queueSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveDraft, 500); }
+function queueSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveDraft, 450); }
 async function saveDraft(){
   const d=cur(); if(!d||!d.draft) return;
   syncNewLedgers(d.draft);
-  try { const r = await api(`/api/docs/${d.id}/draft`,{method:"PUT", body:d.draft}); d.status=r.document.status; } catch(e){ toast("Save failed: "+e.message); }
+  try { await api(`/api/docs/${d.id}/draft`,{method:"PUT", body:d.draft}); } catch(e){ toast("Save failed: "+e.message,"bad"); }
 }
-function exists(name){ return S.ledgerSet.has((name||"").toLowerCase()); }
-function guessParent(e, draft){
-  const k=e.kind||"", base=draft.voucher_base||"Purchase";
-  if (k==="party"||e.ledger===draft.party_ledger) return ["Purchase","Credit Note"].includes(base)?"Sundry Creditors":"Sundry Debtors";
-  if (["cgst","sgst","igst","cess","tds"].includes(k)) return "Duties & Taxes";
-  if (k==="goods") return ["Purchase","Debit Note"].includes(base)?"Purchase Accounts":"Sales Accounts";
-  return "Indirect Expenses";
-}
-function syncNewLedgers(draft){
-  const prev = draft.new_ledgers||[], out=[];
-  for (const e of draft.entries){
-    if (!e.ledger || exists(e.ledger) || out.some(n=>n.name.toLowerCase()===e.ledger.toLowerCase())) continue;
-    const p = prev.find(n=>n.name.toLowerCase()===e.ledger.toLowerCase());
-    out.push(p || {name:e.ledger, parent:guessParent(e,draft), create:true,
-      gstin: e.ledger===draft.party_ledger ? draft.party_gstin : "", state: e.ledger===draft.party_ledger ? draft.party_state : "",
-      tax_head: ["cgst","sgst","igst","cess","tds"].includes(e.kind) ? e.kind : null});
-  }
-  draft.new_ledgers = out;
-}
-
 function renderEditor(){
-  const d = cur(), el = $("#editor");
-  if (!d) return;
+  const d = cur(), el = $("#editPane");
+  if (!d) { el.innerHTML = `<div class="empty" id="welcome"></div>`; renderWelcome(); return; }
   if (!d.draft) {
-    el.innerHTML = `<div class="empty">${d.status==="scanning"?"Reading the bill with AI…":
-      `${d.error?`<div class="box bad">${esc(d.error)}</div>`:""}<p>Not scanned yet.</p><button class="primary" id="btnScanOne">Scan this bill</button>`}</div>`;
+    el.innerHTML = `<div class="edhead"><h2>${esc(d.name.split("/").pop())}</h2></div>` + (d.status==="scanning"
+      ? `<div class="alert blue">${I.info}<div class="grow">Reading the bill with AI… Free Gemini allows about 5 bills a minute, so it may pause.</div></div>`
+      : `${d.error?`<div class="alert red">${I.warn}<div class="grow">${esc(d.error)}</div></div>`:""}<button class="btn primary" id="btnScanOne">Scan this bill</button>`);
     const b=$("#btnScanOne"); if (b) b.onclick=()=>scanMany([d.id]);
     return;
   }
-  const v = d.draft, b = d.bill || {};
-  syncNewLedgers(v);
-  const dr = v.entries.filter(e=>e.dr_cr==="Dr").reduce((s,e)=>s+(+e.amount||0),0);
-  const cr = v.entries.filter(e=>e.dr_cr==="Cr").reduce((s,e)=>s+(+e.amount||0),0);
-  const diff = Math.round((dr-cr)*100)/100;
-  const warns = [...(b.warnings||[]), ...(v.notes||[])];
-  const conf = b.confidence!=null ? Math.round(b.confidence*100) : null;
+  const v = d.draft, b = d.bill || {}, miss = missingFor(d), diff = balanceOf(v), pushed = d.status==="pushed";
+  const dr = v.entries.filter(e=>e.dr_cr==="Dr").reduce((s,e)=>s+(+e.amount||0),0), cr = v.entries.filter(e=>e.dr_cr==="Cr").reduce((s,e)=>s+(+e.amount||0),0);
+  const warns = [...(b.warnings||[]), ...(v.notes||[]).filter(n=>!/not found in Tally - will be created/.test(n))];
+  const conf = d.source!=="excel" && b.confidence!=null ? Math.round(b.confidence*100) : null;
+  const st = {new:["","Not scanned"],ready:["blue","Ready to push"],attention:["red","Needs attention"],pushed:["green","In Tally"],error:["red","Error"]}[bucket(d)];
   el.innerHTML = `
-    ${d.status==="pushed"?`<div class="box ok">Pushed to Tally ${esc(d.push.company)} on ${esc(d.push.at.replace("T"," "))}${d.push.optional?" as an <b>Optional</b> voucher — open it in Tally and press Ctrl+L to make it Regular":""}.</div>`:""}
-    ${d.error&&d.status!=="pushed"?`<div class="box bad">${esc(d.error)}</div>`:""}
-    ${warns.length?`<div class="box warn"><b>Check:</b><ul>${warns.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`:""}
-    <div class="grid">
-      <div class="f"><label>Voucher type</label><input data-k="voucher_type" list="dlVtypes" value="${esc(v.voucher_type)}"></div>
-      <div class="f"><label>Date</label><input data-k="date" type="date" value="${esc(v.date)}"></div>
-      <div class="f"><label>Party ledger ${v.party_ledger&&!exists(v.party_ledger)&&S.ledgers.length?'<span class="tag new">new</span>':""}</label><input data-k="party_ledger" list="dlLedgers" value="${esc(v.party_ledger)}"></div>
-      <div class="f"><label>Party GSTIN</label><input data-k="party_gstin" value="${esc(v.party_gstin)}"></div>
-      <div class="f"><label>Supplier bill no. (Reference)</label><input data-k="reference" value="${esc(v.reference)}"></div>
-      <div class="f"><label>Voucher no. (blank = Tally auto)</label><input data-k="voucher_number" value="${esc(v.voucher_number)}"></div>
-      <div class="f full"><label>Narration</label><textarea data-k="narration" rows="2">${esc(v.narration)}</textarea></div>
+    <div class="edhead"><h2 title="${esc(d.name)}">${esc(v.party_ledger||d.name)}</h2><span class="pill ${st[0]}">${st[1]}</span>${conf!=null?`<span class="pill" title="How sure the AI is">AI ${conf}%</span>`:""}</div>
+    ${pushed?`<div class="alert green">${I.ok}<div class="grow">Pushed to <b>${esc(d.push.company)}</b> on ${esc(d.push.at.replace("T"," "))}${d.push.optional?". In Tally open <b>Display More Reports → Exception Reports → Optional Vouchers</b>, check it and press <b>Ctrl+L</b> to make it Regular.":"."}</div></div>`:""}
+    ${d.error&&!pushed?`<div class="alert red">${I.warn}<div class="grow">${esc(d.error)}</div></div>`:""}
+    ${miss.length?`<div class="alert red">${I.warn}<div class="grow"><b>${miss.length} ledger${miss.length>1?"s":""} not in Tally:</b> ${miss.map(esc).join(", ")}<br><span style="opacity:.85">Create them here, or pick an existing ledger in the red box.</span></div><button class="btn danger sm" id="createAll">${I.plus} Create ${miss.length>1?"all":""} in Tally</button></div>`:""}
+    ${!haveLedgers()&&S.settings.company?`<div class="alert amber">${I.info}<div class="grow">Tally ledgers not loaded — connect Tally to check which ledgers exist.</div></div>`:""}
+    ${warns.length?`<div class="alert amber">${I.info}<div class="grow"><b>Check</b><ul>${warns.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div></div>`:""}
+    <div class="grid2">
+      <label class="f"><span>Voucher type</span><input data-k="voucher_type" list="dlVtypes" value="${esc(v.voucher_type)}"></label>
+      <label class="f"><span>Date</span><input data-k="date" type="date" value="${esc(v.date)}"></label>
+      <label class="f"><span>Party ledger ${v.party_ledger&&haveLedgers()&&!exists(v.party_ledger)?'<b style="color:var(--bad)">· not in Tally</b>':""}</span><input data-k="party_ledger" list="dlLedgers" value="${esc(v.party_ledger)}" class="${v.party_ledger&&haveLedgers()?(exists(v.party_ledger)?"okay":"missing"):""}"></label>
+      <label class="f"><span>Party GSTIN</span><input data-k="party_gstin" value="${esc(v.party_gstin)}" style="text-transform:uppercase"></label>
+      <label class="f"><span>Supplier bill no. / Reference</span><input data-k="reference" value="${esc(v.reference)}"></label>
+      <label class="f"><span>Voucher no. (blank = Tally auto)</span><input data-k="voucher_number" value="${esc(v.voucher_number)}"></label>
+      <label class="f full"><span>Narration</span><textarea data-k="narration" rows="2">${esc(v.narration)}</textarea></label>
     </div>
-    <h3>Ledger entries</h3>
-    <table><thead><tr><th>Ledger</th><th style="width:66px">Dr/Cr</th><th style="width:120px;text-align:right">Amount</th><th style="width:24px"></th></tr></thead>
+    <h3 class="sec">Ledger entries<span class="line"></span><span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">${v.entries.length} lines</span></h3>
+    <table class="entries"><colgroup><col><col style="width:72px"><col style="width:132px"><col style="width:34px"></colgroup>
     <tbody>${v.entries.map((e,i)=>{
-      const nl = (v.new_ledgers||[]).find(n=>n.name.toLowerCase()===(e.ledger||"").toLowerCase());
-      return `<tr><td><input data-e="${i}" data-f="ledger" list="dlLedgers" value="${esc(e.ledger)}">
-        ${e.label?`<span class="tag lbl">${esc(e.label)}</span>`:""}
-        ${nl&&S.ledgers.length?`<span class="tag new">new ledger</span>
-          <select data-nl="${esc(nl.name)}" style="width:auto;font-size:12px;padding:1px 4px">${PARENTS.map(p=>`<option ${p===nl.parent?"selected":""}>${p}</option>`).join("")}</select>`:""}
-        ${e.ledger===v.party_ledger?`<div><input data-e="${i}" data-f="bill_ref" placeholder="Bill-wise ref" value="${esc(e.bill_ref||"")}" style="margin-top:3px;font-size:12px"></div>`:""}</td>
+      const m = e.ledger && haveLedgers() && !exists(e.ledger), ok = e.ledger && haveLedgers() && exists(e.ledger);
+      const l = ok ? S.lmap.get(e.ledger.toLowerCase()) : null;
+      return `<tr><td><input data-e="${i}" data-f="ledger" list="dlLedgers" value="${esc(e.ledger)}" class="${m?"missing":ok?"okay":""}" placeholder="Ledger">
+        <div class="lab">${e.label?`<span>${esc(e.label)}</span>`:""}${l?`<span>· ${esc(l.parent)}</span>`:""}
+          ${m?`<span class="miss">${I.warn.replace('class="i"','class="i" style="width:13px;height:13px"')}Not in Tally</span><button class="btn sm" data-mk="${esc(e.ledger)}" style="padding:1px 8px">${I.plus.replace('class="i"','class="i" style="width:13px;height:13px"')}Create</button>`:""}</div>
+        ${e.ledger===v.party_ledger||e.bill_ref?`<input data-e="${i}" data-f="bill_ref" placeholder="Bill-wise ref (${esc(e.bill_type||"New Ref")})" value="${esc(e.bill_ref||"")}" style="margin-top:4px;font-size:12px;padding:4px 8px">`:""}</td>
         <td><select data-e="${i}" data-f="dr_cr"><option ${e.dr_cr==="Dr"?"selected":""}>Dr</option><option ${e.dr_cr==="Cr"?"selected":""}>Cr</option></select></td>
-        <td class="num"><input data-e="${i}" data-f="amount" type="number" step="0.01" value="${(+e.amount).toFixed(2)}"></td>
-        <td><button class="ghost" data-rm="${i}" title="Remove line">✕</button></td></tr>`;}).join("")}
+        <td class="amt"><input data-e="${i}" data-f="amount" type="number" step="0.01" value="${(+e.amount).toFixed(2)}"></td>
+        <td><button class="btn ghost sm" data-rm="${i}" title="Remove line" style="padding:6px">${I.x}</button></td></tr>`;}).join("")}
     </tbody></table>
-    <button class="ghost" id="addRow">＋ Add line</button>
-    <div class="totals"><span>Dr <b>${money(dr)}</b></span><span>Cr <b>${money(cr)}</b></span>
-      <span>Difference <b class="${diff?"bad":"ok"}">${money(diff)}</b></span></div>
-    <div class="actions">
-      <button class="primary" id="pushOne" ${diff?"disabled":""}>Push to Tally</button>
-      <button id="rescan">Re-scan with AI</button>
-      <button id="remap" title="Rebuild from the AI result using current ledgers">Re-map ledgers</button>
+    <button class="btn ghost sm" id="addRow">${I.plus} Add line</button>
+    <div class="totals"><span>Dr <b>${money(dr)}</b></span><span>Cr <b>${money(cr)}</b></span><span>Difference <span class="${diff?"bad":"good"}">${diff?money(diff):"0.00 ✓"}</span></span></div>
+    <div class="edactions">
+      <button class="btn primary" id="pushOne" ${diff||pushed?"disabled":""}>${I.ok} ${pushed?"Already in Tally":miss.length&&!$("#optCreate").checked?"Create ledgers & push":"Push to Tally"}</button>
+      ${d.source!=="excel"?`<button class="btn" id="rescan">Re-scan with AI</button>`:""}
+      ${d.bill?`<button class="btn ghost" id="remap" title="Rebuild from the source using current Tally ledgers">Re-map ledgers</button>`:""}
     </div>
-    <h3>What the AI read ${conf!=null?`<span class="chip">${conf}% sure</span>`:""}</h3>
-    <div class="kv">
-      <span>Supplier</span><span>${esc(b.supplier_name)} ${esc(b.supplier_gstin)}</span>
-      <span>Buyer</span><span>${esc(b.buyer_name)} ${esc(b.buyer_gstin)}</span>
-      <span>Bill</span><span>${esc(b.invoice_number)} · ${esc(b.invoice_date)}</span>
-      <span>Taxable</span><span>${money(b.taxable_total)}</span>
-      <span>GST</span><span>CGST ${money(b.cgst)} · SGST ${money(b.sgst)} · IGST ${money(b.igst)}${b.cess?` · Cess ${money(b.cess)}`:""}</span>
-      <span>Round off</span><span>${money(b.round_off)}</span>
-      <span>Total</span><span><b>${money(b.grand_total)}</b></span>
-    </div>
-    ${b.items&&b.items.length?`<h3>Items</h3><table style="font-size:12px"><tr><th>Item</th><th>HSN</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">GST%</th><th style="text-align:right">Taxable</th></tr>
-      ${b.items.map(it=>`<tr><td>${esc(it.description)}</td><td>${esc(it.hsn_sac)}</td><td style="text-align:right">${it.quantity||""} ${esc(it.unit)}</td><td style="text-align:right">${money(it.rate)}</td><td style="text-align:right">${it.gst_rate}</td><td style="text-align:right">${money(it.taxable_value)}</td></tr>`).join("")}</table>`:""}`;
+    ${d.bill?`<details class="more" ${d.source==="excel"?"":"open"}><summary>${d.source==="excel"?"Values from Excel":"What the AI read"}</summary>
+      <div class="kv">
+        <span>Supplier</span><span>${esc(b.supplier_name)} <span class="hint">${esc(b.supplier_gstin)}</span></span>
+        <span>Buyer</span><span>${esc(b.buyer_name)} <span class="hint">${esc(b.buyer_gstin)}</span></span>
+        <span>Bill</span><span>${esc(b.invoice_number)} · ${esc(dmy(b.invoice_date))}</span>
+        <span>Taxable</span><span>${money(b.taxable_total)}</span>
+        <span>GST</span><span>CGST ${money(b.cgst)} · SGST ${money(b.sgst)} · IGST ${money(b.igst)}${b.cess?` · Cess ${money(b.cess)}`:""}</span>
+        <span>Round off</span><span>${money(b.round_off)}</span>
+        <span>Total</span><span><b>₹ ${money(b.grand_total)}</b></span>
+      </div>
+      ${b.items&&b.items.length?`<table class="t" style="margin:10px 0;font-size:12px"><thead><tr><th>Item</th><th>HSN</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">GST%</th><th class="num">Taxable</th></tr></thead><tbody>
+        ${b.items.map(it=>`<tr><td>${esc(it.description)}</td><td>${esc(it.hsn_sac)}</td><td class="num">${it.quantity||""} ${esc(it.unit)}</td><td class="num">${money(it.rate)}</td><td class="num">${it.gst_rate}</td><td class="num">${money(it.taxable_value)}</td></tr>`).join("")}</tbody></table>`:""}
+    </details>`:""}`;
 
   el.querySelectorAll("[data-k]").forEach(n => n.onchange = () => {
-    const k=n.dataset.k, old=v[k]; v[k]=n.value;
+    const k=n.dataset.k, old=v[k]; v[k]=k==="party_gstin"?n.value.toUpperCase():n.value;
     if (k==="party_ledger") v.entries.forEach(e=>{ if (e.ledger===old) e.ledger=n.value; });
-    queueSave(); if (k==="party_ledger") renderEditor();
+    queueSave(); if (["party_ledger","voucher_type"].includes(k)) { renderEditor(); renderList(); }
   });
   el.querySelectorAll("[data-e]").forEach(n => n.onchange = () => {
-    const e=v.entries[+n.dataset.e]; const f=n.dataset.f;
-    e[f] = f==="amount" ? (Math.round((+n.value||0)*100)/100) : n.value;
-    queueSave(); renderEditor();
+    const e=v.entries[+n.dataset.e], f=n.dataset.f;
+    e[f] = f==="amount" ? Math.round((+n.value||0)*100)/100 : n.value;
+    queueSave(); renderEditor(); renderList(); renderStats();
   });
-  el.querySelectorAll("[data-nl]").forEach(n => n.onchange = () => {
-    const nl=v.new_ledgers.find(x=>x.name===n.dataset.nl); nl.parent=n.value; queueSave();
-  });
-  el.querySelectorAll("[data-rm]").forEach(n => n.onclick = () => { v.entries.splice(+n.dataset.rm,1); queueSave(); renderEditor(); });
+  el.querySelectorAll("[data-rm]").forEach(n => n.onclick = () => { v.entries.splice(+n.dataset.rm,1); queueSave(); renderEditor(); renderList(); renderStats(); });
+  el.querySelectorAll("[data-mk]").forEach(n => n.onclick = () => openLedgerDrawer(specFor(n.dataset.mk, v), () => { renderEditor(); renderList(); renderStats(); }));
   $("#addRow").onclick = () => { v.entries.push({ledger:"",dr_cr:diff>0?"Cr":"Dr",amount:Math.abs(diff),kind:"manual",label:""}); renderEditor(); };
+  const ca = $("#createAll"); if (ca) ca.onclick = () => createMissing(d);
   $("#pushOne").onclick = async () => { await saveDraft(); push([d.id]); };
-  $("#rescan").onclick = () => scanMany([d.id]);
-  $("#remap").onclick = async () => {
-    try { const r=await api(`/api/docs/${d.id}/remap`,{method:"POST"}); Object.assign(d,r.document); renderEditor(); renderList(); toast("Ledgers re-mapped"); }
-    catch(e){ toast(e.message); }
+  const rs=$("#rescan"); if (rs) rs.onclick = () => scanMany([d.id]);
+  const rm=$("#remap"); if (rm) rm.onclick = async () => {
+    try { const r=await api(`/api/docs/${d.id}/remap`,{method:"POST"}); Object.assign(d,r.document); refreshAll(); toast("Ledgers re-mapped","ok"); } catch(e){ toast(e.message,"bad"); }
   };
 }
+async function createMissing(d){
+  const miss = missingFor(d); if (!miss.length) return;
+  if (miss.length===1) return openLedgerDrawer(specFor(miss[0], d.draft), refreshAll);
+  // several: review them together in the drawer
+  openBulkDrawer(miss.map(n=>specFor(n, d.draft)));
+}
 
-// ── push ─────────────────────────────────────────────────────
+/* ═════════════ push / xml ═════════════ */
 async function push(ids, force=false){
-  if (!S.settings.company) { toast("Choose the Tally company first"); return; }
+  if (!S.settings.company) { toast("Choose the Tally company first (bottom left)","bad"); return; }
   clearTimeout(saveTimer); await saveDraft();
-  S.busy=true; updateButtons(); toast("Pushing to Tally…", 60000);
+  const docs = ids.map(id=>S.docs.find(d=>d.id===id)).filter(Boolean);
+  const missAll = [...new Map(docs.flatMap(d=>missingFor(d).map(n=>[n.toLowerCase(), specFor(n,d.draft)]))).values()];
+  if (missAll.length && !$("#optCreate").checked) {
+    // Make the missing masters first (user reviews them), then push
+    return openBulkDrawer(missAll, () => push(ids, force));
+  }
+  S.busy=true; updateButtons(); toast("Pushing to Tally…");
   try {
     const r = await fetch("/api/push",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({doc_ids:ids, optional:$("#optOptional").checked, create_missing_ledgers:$("#optCreate").checked, force})}).then(x=>x.json());
     if (r.error) throw new Error(r.error);
-    const ok = r.results.filter(x=>x.ok), bad = r.results.filter(x=>!x.ok);
-    const dups = bad.filter(x=>x.duplicate);
-    toast(`${ok.length} pushed${bad.length?`, ${bad.length} failed`:""}` + (ok.length&&$("#optOptional").checked?" — open Tally Day Book to review":""), 7000);
+    const ok = r.results.filter(x=>x.ok), bad = r.results.filter(x=>!x.ok), dups = bad.filter(x=>x.duplicate);
+    if (ok.length) toast(`${ok.length} pushed to Tally` + ($("#optOptional").checked?" as Optional — accept them in Tally with Ctrl+L":""), "ok", 7000);
     ok.forEach(x=>S.checked.delete(x.id));
     await refreshDocs();
     if (r.results.some(x=>x.ledgers_created)) await loadLedgers(true);
     renderEditor();
-    if (dups.length && confirm(`${dups.length} bill(s) were pushed before:\n${dups.map(x=>x.name).join("\n")}\n\nPush them again?`)) return push(dups.map(x=>x.id), true);
-    if (bad.length && !dups.length) alert(bad.map(x=>`${x.name}:\n${x.error}`).join("\n\n"));
-  } catch(e){ toast("Push failed: "+e.message, 7000); }
+    if (dups.length && confirm(`${dups.length} entr${dups.length>1?"ies were":"y was"} pushed before:\n${dups.map(x=>x.name).join("\n")}\n\nPush again?`)) return push(dups.map(x=>x.id), true);
+    if (bad.length && !dups.length) toast(bad.map(x=>`${x.name}: ${x.error}`).join(" | "), "bad", 10000);
+  } catch(e){ toast("Push failed: "+e.message, "bad", 8000); }
   finally { S.busy=false; updateButtons(); }
 }
 $("#btnPush").onclick = () => push([...S.checked]);
@@ -475,53 +816,252 @@ $("#btnXml").onclick = async () => {
   try {
     const blob = await api("/api/xml",{method:"POST", body:{drafts, optional:$("#optOptional").checked}});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="tally_vouchers.xml"; a.click();
-    toast("Saved. In Tally: Import → Transactions → choose this file.");
-  } catch(e){ toast(e.message, 6000); }
+    toast("Saved. In Tally: Import → Transactions → choose this file.","ok");
+  } catch(e){ toast(e.message,"bad"); }
 };
 
-// ── settings & history ───────────────────────────────────────
-function openSettings(){
+/* ═════════════ master forms (drawer + masters page) ═════════════ */
+function ledgerForm(p, idp){
+  const g = p.parent||"Sundry Creditors";
+  return `<div class="grid2">
+    <label class="f full"><span>Ledger name *</span><input id="${idp}name" value="${esc(p.name||"")}" ${p.lockName?"":""}></label>
+    <label class="f full"><span>Under group *</span><input id="${idp}parent" list="dlGroups" value="${esc(g)}"></label>
+    <div class="full" id="${idp}party">
+      <div class="grid2">
+        <label class="f"><span>GSTIN <span id="${idp}gchk"></span></span><input id="${idp}gstin" value="${esc(p.gstin||"")}" maxlength="15" style="text-transform:uppercase"></label>
+        <label class="f"><span>Registration type</span><select id="${idp}gst_type">${["Regular","Composition","Unregistered","Consumer","Unknown"].map(x=>`<option ${x===(p.gst_type||(p.gstin?"Regular":"Unregistered"))?"selected":""}>${x}</option>`).join("")}</select></label>
+        <label class="f"><span>State</span><input id="${idp}state" list="dlStates" value="${esc(p.state||"")}"></label>
+        <label class="f"><span>PAN</span><input id="${idp}pan" value="${esc(p.pan||"")}" maxlength="10" style="text-transform:uppercase"></label>
+        <label class="f full"><span>Address</span><textarea id="${idp}address" rows="2">${esc(p.address||"")}</textarea></label>
+        <label class="f"><span>Pincode</span><input id="${idp}pincode" value="${esc(p.pincode||"")}" maxlength="6"></label>
+        <label class="chk" style="align-self:end;padding-bottom:8px"><span class="switch"><input type="checkbox" id="${idp}billwise" ${p.billwise===false?"":"checked"}><i></i></span>Maintain bill-by-bill</label>
+      </div>
+    </div>
+    <div class="full" id="${idp}tax">
+      <div class="grid2">
+        <label class="f"><span>Tax type</span><select id="${idp}tax_head"><option value="">Other</option>${[["cgst","GST – Central Tax (CGST)"],["sgst","GST – State Tax (SGST/UTGST)"],["igst","GST – Integrated Tax (IGST)"],["cess","GST – Cess"],["tds","TDS"]].map(([k,l])=>`<option value="${k}" ${k===p.tax_head?"selected":""}>${l}</option>`).join("")}</select></label>
+        <label class="f"><span>Rate % (optional)</span><input id="${idp}gst_rate" type="number" step="0.01" value="${esc(p.gst_rate||"")}"></label>
+      </div>
+    </div>
+    <label class="f"><span>Opening balance</span><input id="${idp}opening" type="number" step="0.01" value="${esc(p.opening||"")}"></label>
+    <label class="f"><span>Dr / Cr</span><select id="${idp}opening_side"><option>Dr</option><option ${p.opening_side==="Cr"?"selected":""}>Cr</option></select></label>
+  </div>`;
+}
+function wireLedgerForm(idp){
+  const q = k => document.getElementById(idp+k);
+  const sync = () => {
+    const g = q("parent").value.trim();
+    q("party").style.display = under(g, ...PARTY_GROUPS) ? "" : "none";
+    q("tax").style.display = under(g, "Duties & Taxes") ? "" : "none";
+    const gs = q("gstin").value.trim().toUpperCase(), chk = q("gchk");
+    if (!gs) chk.innerHTML = "";
+    else if (GSTIN_RE.test(gs)) { chk.innerHTML = `<span class="gst-ok">✓ valid</span>`; if (!q("state").value && STATES[gs.slice(0,2)]) q("state").value = STATES[gs.slice(0,2)]; if (!q("pan").value) q("pan").value = gs.slice(2,12); if (q("gst_type").value==="Unregistered") q("gst_type").value="Regular"; }
+    else chk.innerHTML = `<span class="gst-bad">✗ check format</span>`;
+  };
+  ["parent","gstin"].forEach(k => q(k).addEventListener("input", sync)); sync();
+}
+function readLedgerForm(idp){
+  const q = k => document.getElementById(idp+k), g = q("parent").value.trim(), party = under(g, ...PARTY_GROUPS), tax = under(g, "Duties & Taxes");
+  const d = { name:q("name").value.trim(), parent:g, opening:q("opening").value, opening_side:q("opening_side").value };
+  if (party) Object.assign(d, { gstin:q("gstin").value.trim().toUpperCase(), gst_type:q("gst_type").value, state:q("state").value.trim(), pan:q("pan").value.trim().toUpperCase(), address:q("address").value, pincode:q("pincode").value.trim(), billwise:q("billwise").checked });
+  if (tax) Object.assign(d, { tax_head:q("tax_head").value||null, gst_rate:q("gst_rate").value });
+  return d;
+}
+async function createMasters(items){
+  const r = await api("/api/masters",{method:"POST", body:{items}}).catch(e=>e.data||{results:[{ok:false,error:e.message}]});
+  const ok = (r.results||[]).filter(x=>x.ok), bad = (r.results||[]).filter(x=>!x.ok);
+  if (ok.length) toast(`Created in Tally: ${ok.map(x=>x.name).join(", ")}`, "ok");
+  if (bad.length) toast(bad.map(x=>`${x.name||"?"}: ${x.error}`).join(" | "), "bad", 9000);
+  await loadLedgers(true);
+  if (items.some(i=>i.kind!=="ledger")) await loadMasters();
+  return {ok, bad};
+}
+function openDrawer(title, body, foot, wide){ $("#drawer").classList.toggle("wide", !!wide); $("#drTitle").textContent=title; $("#drBody").innerHTML=body; $("#drFoot").innerHTML=foot; $("#scrim").style.display="block"; $("#drawer").classList.add("on"); }
+function closeDrawer(){ $("#scrim").style.display="none"; $("#drawer").classList.remove("on"); }
+$("#drClose").onclick = closeDrawer; $("#scrim").onclick = closeDrawer;
+function openLedgerDrawer(spec, after){
+  if (!S.settings.company) return toast("Choose the Tally company first (bottom left)","bad");
+  const oldName = spec.name;
+  openDrawer("Create ledger in Tally", `<div class="alert blue">${I.info}<div class="grow">This creates the ledger directly in <b>${esc(S.settings.company)}</b>.</div></div>` + ledgerForm(spec,"dl_"),
+    `<button class="btn" id="dlCancel">Cancel</button><button class="btn primary" id="dlSave">${I.plus} Create in Tally</button>`);
+  wireLedgerForm("dl_");
+  $("#dlCancel").onclick = closeDrawer;
+  $("#dlSave").onclick = async () => {
+    const data = readLedgerForm("dl_"); if (!data.name || !data.parent) return toast("Name and group are required","bad");
+    $("#dlSave").disabled = true;
+    const {ok} = await createMasters([{kind:"ledger", data}]);
+    $("#dlSave").disabled = false;
+    if (ok.length) {
+      const d = cur(); // if the name was edited, update the bill to use it
+      if (d && d.draft && data.name !== oldName) { d.draft.entries.forEach(e=>{ if (e.ledger===oldName) e.ledger=data.name; }); if (d.draft.party_ledger===oldName) d.draft.party_ledger=data.name; queueSave(); }
+      closeDrawer(); after && after();
+    }
+  };
+}
+function openBulkDrawer(specs, after){
+  if (!S.settings.company) return toast("Choose the Tally company first (bottom left)","bad");
+  openDrawer(`Create ${specs.length} ledger${specs.length>1?"s":""} in Tally`,
+    `<div class="alert red">${I.warn}<div class="grow">These ledgers are used in your entries but are <b>not in ${esc(S.settings.company)}</b>. Check the names and groups, then create them.</div></div>
+     <table class="t"><thead><tr><th style="width:24px"></th><th>Ledger name</th><th>Under group</th><th>GSTIN</th></tr></thead><tbody>
+     ${specs.map((s,i)=>`<tr><td><input type="checkbox" data-bi="${i}" checked style="width:auto"></td><td><input data-bn="${i}" value="${esc(s.name)}"></td>
+       <td style="width:210px"><input data-bg="${i}" list="dlGroups" value="${esc(s.parent)}"></td><td style="width:170px"><input data-bs="${i}" value="${esc(s.gstin||"")}" style="text-transform:uppercase" placeholder="—"></td></tr>`).join("")}
+     </tbody></table><p class="hint">Need address, PAN or opening balance? Use <b>Create</b> next to a single ledger, or the Masters page.</p>`,
+    `<button class="btn" id="bkCancel">Cancel</button><button class="btn primary" id="bkSave">${I.plus} Create in Tally${after?" & push":""}</button>`, true);
+  $("#bkCancel").onclick = closeDrawer;
+  $("#bkSave").onclick = async () => {
+    const items = [], renames = [];
+    specs.forEach((s,i) => {
+      if (!document.querySelector(`[data-bi="${i}"]`).checked) return;
+      const name = document.querySelector(`[data-bn="${i}"]`).value.trim(), parent = document.querySelector(`[data-bg="${i}"]`).value.trim();
+      const gstin = document.querySelector(`[data-bs="${i}"]`).value.trim().toUpperCase();
+      if (!name || !parent) return;
+      if (name !== s.name) renames.push([s.name, name]);
+      items.push({kind:"ledger", data:{...s, name, parent, gstin, state: s.state || (GSTIN_RE.test(gstin)?STATES[gstin.slice(0,2)]||"":"")}});
+    });
+    if (!items.length) return closeDrawer();
+    $("#bkSave").disabled = true;
+    const {bad} = await createMasters(items);
+    if (renames.length) { for (const d of S.docs) if (d.draft) { let ch=false; d.draft.entries.forEach(e=>renames.forEach(([a,b])=>{ if (e.ledger===a){ e.ledger=b; ch=true; } })); renames.forEach(([a,b])=>{ if (d.draft.party_ledger===a) d.draft.party_ledger=b; }); if (ch) await api(`/api/docs/${d.id}/draft`,{method:"PUT", body:d.draft}).catch(()=>{}); } }
+    $("#bkSave").disabled = false; closeDrawer(); refreshAll();
+    if (!bad.length && after) after();
+  };
+}
+
+/* ═════════════ masters page ═════════════ */
+$$("#mtabs button").forEach(b => b.onclick = () => { S.mtab=b.dataset.tab; $$("#mtabs button").forEach(x=>x.classList.toggle("on",x===b)); renderMasters(true); });
+$("#mSearch").oninput = () => renderMasterList();
+$("#mGroupFilter").onchange = () => renderMasterList();
+function renderMasters(resetForm){
+  $("#cLed").textContent = S.ledgers.length; $("#cGrp").textContent = Object.keys(S.gparents).length;
+  $("#cItm").textContent = S.masters.stock_items.length; $("#cUnit").textContent = S.masters.units.length;
+  if (S.settings.company && !S.masters._loaded) { S.masters._loaded = true; loadMasters(); }
+  const t = S.mtab, f = $("#mForm");
+  const titles = {ledger:"Create ledger in Tally", group:"Create group in Tally", stock_item:"Create stock item in Tally", unit:"Create unit in Tally"};
+  $("#mFormTitle").textContent = titles[t];
+  if (resetForm || !f.dataset.tab || f.dataset.tab!==t) {
+    f.dataset.tab = t;
+    const save = `<div style="margin-top:14px;display:flex;gap:8px"><button class="btn primary" id="mSave">${I.plus} Create in Tally</button><button class="btn ghost" id="mClear">Clear</button></div>`;
+    if (t==="ledger") { f.innerHTML = ledgerForm({}, "ml_") + save; wireLedgerForm("ml_"); }
+    if (t==="group") f.innerHTML = `<div class="grid2"><label class="f full"><span>Group name *</span><input id="mg_name"></label><label class="f full"><span>Under *</span><input id="mg_parent" list="dlGroups" value="Sundry Creditors"></label></div><p class="hint">E.g. "Creditors – Yarn" under Sundry Creditors, or "Input GST" under Duties &amp; Taxes.</p>` + save;
+    if (t==="stock_item") f.innerHTML = `<div class="grid2"><label class="f full"><span>Item name *</span><input id="ms_name"></label>
+      <label class="f"><span>Under stock group</span><input id="ms_parent" list="dlStockGroups" placeholder="Primary"></label><label class="f"><span>Unit *</span><input id="ms_unit" list="dlUnits" value="Nos"></label>
+      <label class="f"><span>HSN / SAC</span><input id="ms_hsn"></label><label class="f"><span>GST rate %</span><select id="ms_gst_rate"><option value="">—</option>${[0,0.25,3,5,12,18,28].map(r=>`<option>${r}</option>`).join("")}</select></label>
+      <label class="f"><span>Opening qty</span><input id="ms_opening_qty" type="number" step="0.001"></label><label class="f"><span>Opening rate</span><input id="ms_opening_rate" type="number" step="0.01"></label></div>
+      <p class="hint">The unit must exist in Tally — create it on the Units tab first.</p>` + save;
+    if (t==="unit") f.innerHTML = `<div class="grid2"><label class="f"><span>Symbol *</span><input id="mu_name" placeholder="Kg, Mtr, Pcs…"></label><label class="f"><span>Formal name</span><input id="mu_formal_name" placeholder="Kilogram"></label><label class="f"><span>Decimal places</span><input id="mu_decimals" type="number" min="0" max="4" value="0"></label></div>` + save;
+    $("#mClear").onclick = () => renderMasters(true);
+    $("#mSave").onclick = async () => {
+      if (!S.settings.company) return toast("Choose the Tally company first (bottom left)","bad");
+      let data;
+      if (t==="ledger") data = readLedgerForm("ml_");
+      else { const p = {group:"mg_", stock_item:"ms_", unit:"mu_"}[t]; data = {}; f.querySelectorAll(`[id^="${p}"]`).forEach(x=>data[x.id.slice(p.length)] = x.value.trim()); }
+      if (!data.name) return toast("Name is required","bad");
+      $("#mSave").disabled = true;
+      const {ok} = await createMasters([{kind:t, data}]);
+      $("#mSave").disabled = false;
+      if (ok.length) { if (ok[0].existed) toast(`'${data.name}' already exists in Tally`); renderMasters(true); }
+    };
+  }
+  const gf = $("#mGroupFilter");
+  gf.style.display = t==="ledger" ? "" : "none";
+  if (t==="ledger") { const groups = [...new Set(S.ledgers.map(l=>l.parent))].sort(); const v = gf.value; gf.innerHTML = `<option value="">All groups</option>` + groups.map(g=>`<option ${g===v?"selected":""}>${esc(g)}</option>`).join(""); }
+  renderMasterList();
+}
+function renderMasterList(){
+  const t = S.mtab, q = $("#mSearch").value.toLowerCase(), gf = $("#mGroupFilter").value, el = $("#mList");
+  $("#mListTitle").textContent = {ledger:"Ledgers",group:"Groups",stock_item:"Stock items",unit:"Units"}[t] + " in Tally";
+  if (!S.settings.company) { el.innerHTML = `<div class="empty">Choose a company (bottom left) to see its masters.</div>`; return; }
+  let rows, head;
+  if (t==="ledger") { rows = S.ledgers.filter(l => (!gf || l.parent===gf) && (!q || (l.name+" "+l.gstin).toLowerCase().includes(q))); head = ["Name","Group","GSTIN"]; rows = rows.map(l=>[l.name, l.parent, l.gstin]); }
+  if (t==="group") { rows = Object.entries(S.gparents).filter(([n])=>!q||n.toLowerCase().includes(q)).sort(); head = ["Group","Under"]; rows = rows.map(([n,p])=>[n, p||"Primary"]); }
+  if (t==="stock_item") { rows = S.masters.stock_items.filter(i=>!q||i.name.toLowerCase().includes(q)); head = ["Item","Stock group","Unit"]; rows = rows.map(i=>[i.name,i.parent||"Primary",i.unit]); }
+  if (t==="unit") { rows = S.masters.units.filter(u=>!q||u.name.toLowerCase().includes(q)); head = ["Unit"]; rows = rows.map(u=>[u.name]); }
+  const shown = rows.slice(0, 500);
+  el.innerHTML = rows.length ? `<table class="t"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${shown.map(r=>`<tr>${r.map((c,i)=>`<td${i?' class="hint"':""}>${esc(c||"")}</td>`).join("")}</tr>`).join("")}</tbody></table>${rows.length>500?`<div class="hint" style="padding:10px">Showing 500 of ${rows.length} — search to narrow down.</div>`:""}`
+    : `<div class="empty">None found.</div>`;
+}
+
+/* ═════════════ excel page ═════════════ */
+$("#xdrop").onclick = () => $("#fileExcel").click();
+$("#fileExcel").onchange = e => { importExcel(e.target.files); e.target.value=""; };
+wireDrop($("#xdrop"), files => importExcel(files));
+async function importExcel(files){
+  if (!files.length) return;
+  const fd = new FormData(); for (const f of files) fd.append("files", f);
+  try {
+    const r = await api("/api/import/excel",{method:"POST", body:fd});
+    await refreshDocs();
+    const miss = r.documents.reduce((n,d)=>n+missingFor(d).length,0);
+    $("#xresult").innerHTML = `<div class="alert green">${I.ok}<div class="grow"><b>${r.documents.length} entr${r.documents.length>1?"ies":"y"} imported</b>${miss?` · <span style="color:var(--bad)">${miss} ledger(s) not in Tally</span>`:""}${r.skipped.length?` · ${r.skipped.length} row(s) skipped`:""}
+      ${r.skipped.length?`<ul>${r.skipped.slice(0,8).map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:""}</div><button class="btn primary sm" onclick="go('bills')">Review in Bills →</button></div>
+      <div class="card"><table class="t"><thead><tr><th>Type</th><th>Party / first ledger</th><th>Date</th><th>Ref</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+      ${r.documents.map(d=>{ const v=d.draft, m=missingFor(d), a=(v.entries.find(e=>e.ledger===v.party_ledger)||v.entries[0]||{}).amount;
+        return `<tr><td>${esc(v.voucher_type)}</td><td>${esc(v.party_ledger||v.entries[0]?.ledger)}</td><td>${esc(dmy(v.date))}</td><td>${esc(v.reference||v.voucher_number)}</td><td class="num">${money(a)}</td>
+        <td>${m.length?`<span class="pill red">${m.length} not in Tally</span>`:balanceOf(v)?`<span class="pill red">Not balanced</span>`:`<span class="pill blue">Ready</span>`}</td></tr>`; }).join("")}
+      </tbody></table></div>`;
+    toast(`${r.documents.length} entries imported from Excel`, "ok");
+    if (S.page!=="excel") go("bills");
+  } catch(e){ $("#xresult").innerHTML = `<div class="alert red">${I.warn}<div class="grow">${esc(e.message)}</div></div>`; toast("Import failed: "+e.message, "bad", 8000); }
+}
+
+/* ═════════════ history ═════════════ */
+let HIST = [];
+async function renderHistory(){
+  try { HIST = (await api("/api/history")).history; } catch(_){ HIST = []; }
+  drawHistory();
+}
+$("#hSearch").oninput = () => drawHistory();
+function drawHistory(){
+  const q = $("#hSearch").value.toLowerCase();
+  const rows = HIST.filter(x=>!q || [x.company,x.voucher_type,x.party,x.reference,x.doc].join(" ").toLowerCase().includes(q));
+  $("#histBody").innerHTML = rows.length ? rows.map(x=>`<tr><td>${esc(x.at.replace("T"," "))}</td><td>${esc(x.company)}</td><td>${esc(x.voucher_type)}</td><td>${esc(x.party)}</td><td>${esc(x.reference)}</td><td class="num">${money(x.amount)}</td><td><span class="pill ${x.optional?"amber":"green"}">${x.optional?"Optional":"Regular"}</span></td><td class="hint">${esc((x.doc||"").split("/").pop())}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">Nothing pushed yet.</td></tr>`;
+}
+
+/* ═════════════ settings ═════════════ */
+function fillSettings(){
   const s=S.settings;
-  document.querySelectorAll("[name=provider]").forEach(r=>r.checked = r.value===s.provider);
-  $("#sGeminiKey").value=s.gemini_key; $("#sRpm").value=s.gemini_rpm; $("#sClaudeKey").value=s.claude_key; $("#sModel").value=s.model;
+  $("#sProvider").value=s.provider; $("#sGeminiKey").value=s.gemini_key; $("#sClaudeKey").value=s.claude_key; $("#sModel").value=s.model; $("#sRpm").value=s.gemini_rpm;
   $("#sTallyUrl").value=s.tally_url; $("#sOwnGstin").value=s.own_gstin;
-  $("#sDefPurchase").value=s.default_purchase_ledger; $("#sDefSales").value=s.default_sales_ledger;
-  $("#sDefRound").value=s.default_roundoff_ledger; $("#sDefFreight").value=s.default_freight_ledger;
+  $("#sDefPurchase").value=s.default_purchase_ledger; $("#sDefSales").value=s.default_sales_ledger; $("#sDefRound").value=s.default_roundoff_ledger; $("#sDefFreight").value=s.default_freight_ledger;
   $("#sVtPurchase").value=(s.vtype_map||{}).Purchase||""; $("#sVtSales").value=(s.vtype_map||{}).Sales||"";
-  $("#dataDir").textContent=S.info.data_dir; providerChanged(); $("#dlgSettings").showModal();
+  $("#dataDir").textContent=S.info.data_dir; providerChanged();
 }
 function providerChanged(){
-  const p=(document.querySelector("[name=provider]:checked")||{}).value||"gemini";
-  // Both keys stay visible: the one not selected is a backup used when the main AI is busy
-  $("#bkGemini").textContent = p==="gemini" ? "" : " (backup)"; $("#bkClaude").textContent = p==="claude" ? "" : " (backup)";
-  const pr=S.info.providers[p]; $("#dlModels").innerHTML=pr.models.map(m=>`<option>${m}</option>`).join(""); $("#sModel").placeholder=pr.default;
+  const p=$("#sProvider").value, pr=S.info.providers[p];
+  $("#bkGemini").textContent = p==="gemini"?"":"(backup)"; $("#bkClaude").textContent = p==="claude"?"":"(backup)";
+  $("#dlModels").innerHTML=pr.models.map(m=>`<option>${m}</option>`).join("");
   if (Object.entries(S.info.providers).some(([k,x])=>k!==p && x.models.includes($("#sModel").value))) $("#sModel").value="";
-  if (p==="gemini" && S.settings.gemini_key_set) {
-    // Google retires model names often: offer what this key can actually use today
-    api("/api/ai/models").then(r=>{ if (r.models.length) $("#dlModels").innerHTML=r.models.map(m=>`<option>${esc(m)}</option>`).join(""); }).catch(()=>{});
-  }
+  if (p==="gemini" && S.settings.gemini_key_set) api("/api/ai/models").then(r=>{ if (r.models.length) $("#dlModels").innerHTML=r.models.map(m=>`<option>${esc(m)}</option>`).join(""); }).catch(()=>{});
 }
-document.querySelectorAll("[name=provider]").forEach(r=>r.onchange=providerChanged);
-$("#btnSettings").onclick=openSettings;
-$("#sCancel").onclick=()=>$("#dlgSettings").close();
-$("#sSave").onclick=async()=>{
+$("#sProvider").onchange = providerChanged;
+$("#sSave").onclick = async () => {
   const vt={}; if ($("#sVtPurchase").value) vt.Purchase=$("#sVtPurchase").value; if ($("#sVtSales").value) vt.Sales=$("#sVtSales").value;
-  S.settings = await api("/api/settings",{method:"POST", body:{
-    provider:(document.querySelector("[name=provider]:checked")||{}).value||"gemini",
-    gemini_key:$("#sGeminiKey").value, claude_key:$("#sClaudeKey").value, model:$("#sModel").value, gemini_rpm:$("#sRpm").value,
-    tally_url:$("#sTallyUrl").value, own_gstin:$("#sOwnGstin").value,
-    default_purchase_ledger:$("#sDefPurchase").value, default_sales_ledger:$("#sDefSales").value,
-    default_roundoff_ledger:$("#sDefRound").value, default_freight_ledger:$("#sDefFreight").value, vtype_map:vt}});
-  $("#dlgSettings").close(); toast("Settings saved"); checkTally();
-};
-$("#btnHistory").onclick=async()=>{
-  const h=(await api("/api/history")).history;
-  $("#histBody").innerHTML = h.length ? h.map(x=>`<tr><td>${esc(x.at.replace("T"," "))}</td><td>${esc(x.company)}</td><td>${esc(x.voucher_type)}</td><td>${esc(x.party)}</td><td>${esc(x.reference)}</td><td style="text-align:right">${money(x.amount)}</td><td>${x.optional?"Optional":"Regular"}</td><td>${esc((x.doc||"").split("/").pop())}</td></tr>`).join("")
-    : `<tr><td colspan="8" class="empty">Nothing pushed yet.</td></tr>`;
-  $("#dlgHistory").showModal();
+  try {
+    S.settings = await api("/api/settings",{method:"POST", body:{ provider:$("#sProvider").value, gemini_key:$("#sGeminiKey").value, claude_key:$("#sClaudeKey").value,
+      model:$("#sModel").value, gemini_rpm:$("#sRpm").value, tally_url:$("#sTallyUrl").value, own_gstin:$("#sOwnGstin").value,
+      default_purchase_ledger:$("#sDefPurchase").value, default_sales_ledger:$("#sDefSales").value, default_roundoff_ledger:$("#sDefRound").value,
+      default_freight_ledger:$("#sDefFreight").value, vtype_map:vt }});
+    fillSettings(); toast("Settings saved","ok"); checkTally();
+  } catch(e){ toast(e.message,"bad"); }
 };
 
-boot().catch(e=>toast("Startup error: "+e.message, 8000));
+/* ═════════════ keyboard ═════════════ */
+document.addEventListener("keydown", e => {
+  if (e.key==="Escape") return closeDrawer();
+  if (S.page!=="bills") return;
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"");
+  if ((e.ctrlKey||e.metaKey) && e.key==="Enter" && cur()?.draft) { e.preventDefault(); saveDraft().then(()=>push([S.sel])); return; }
+  if (typing) return;
+  if (e.key==="ArrowDown"||e.key==="ArrowUp"||e.key==="j"||e.key==="k") {
+    const list = visibleDocs(); if (!list.length) return;
+    const i = list.findIndex(d=>d.id===S.sel), n = (e.key==="ArrowDown"||e.key==="j") ? Math.min(list.length-1, i+1) : Math.max(0, i-1);
+    e.preventDefault(); select(list[n<0?0:n].id);
+    document.querySelector(`.doc[data-id="${S.sel}"]`)?.scrollIntoView({block:"nearest"});
+  }
+});
+
+boot().catch(e=>toast("Startup error: "+e.message, "bad", 9000));
 </script>
 </body>
 </html>

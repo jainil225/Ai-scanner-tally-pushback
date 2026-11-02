@@ -255,6 +255,18 @@ def render(inv, rows_per_page=18):
     return pages, c
 
 
+def photocopy(img, seed=11):
+    """Grey, low-contrast, speckled - like a photocopy that was scanned again."""
+    rnd = random.Random(seed)
+    g = img.convert("L").point(lambda v: int(70 + v * 0.62))
+    g = g.rotate(0.8, resample=Image.BICUBIC, fillcolor=228)
+    px = g.load()
+    for _ in range(60000):
+        x, y = rnd.randrange(g.width), rnd.randrange(g.height)
+        px[x, y] = max(0, px[x, y] - rnd.randint(40, 120))
+    return g.filter(ImageFilter.GaussianBlur(0.6)).convert("RGB")
+
+
 def phone_photo(img, angle=-2.2, seed=7):
     """Make a clean page look like a photo taken on a phone: tilt, shadow, noise, blur."""
     rnd = random.Random(seed)
@@ -362,7 +374,126 @@ BILLS = [
         ],
         "photo": True,
     },
+    {
+        "file": "6_textile_yarn_purchase_5pct.jpg",
+        "what": "Textile: cotton and polyester yarn, GST 5%, same state, quantities in Kg.",
+        "color": (0, 90, 110),
+        "seller": {"name": "Surat Yarn Mills LLP", "address": "Plot 21-24, Sachin GIDC, Surat - 394230, Gujarat",
+                   "gstin": "24AAPFS4471K1ZB", "state": "Gujarat", "phone": "0261-239 7788"},
+        "buyer": DEMO, "number": "SYM/26-27/1184", "date": "08/06/2026", "pos": "24-Gujarat",
+        "ref": "LR 55120 / GJ05 CT 7711",
+        "items": [
+            {"desc": "Cotton Yarn 30s Combed", "hsn": "5205", "qty": 1250, "unit": "Kg", "rate": 268.00, "gst": 5},
+            {"desc": "Cotton Yarn 40s Combed", "hsn": "5205", "qty": 800, "unit": "Kg", "rate": 294.50, "gst": 5},
+            {"desc": "Polyester Spun Yarn 2/30", "hsn": "5509", "qty": 600, "unit": "Kg", "rate": 162.75, "gst": 5,
+             "disc": 1.5},
+        ],
+        "bank": "ICICI Bank, A/c 0045 0550 1184, IFSC ICIC0000045",
+    },
+    {
+        "file": "7_job_work_dyeing_bill_5pct.png",
+        "what": "Textile job work (dyeing & processing) service bill, SAC 998821, GST 5%.",
+        "color": (120, 20, 90),
+        "heading": "TAX INVOICE (JOB WORK)",
+        "seller": {"name": "Rangoli Dyeing & Processing House", "address": "Pandesara GIDC, Surat - 394221, Gujarat",
+                   "gstin": "24AAKFR9032P1Z4", "state": "Gujarat", "phone": "98790 11223"},
+        "buyer": DEMO, "number": "RDP/0412", "date": "15-06-2026", "pos": "24-Gujarat", "terms": "15 days",
+        "ref": "Challan 3381 dt 10-06-2026",
+        "items": [
+            {"desc": "Dyeing charges - Cotton fabric (reactive)", "hsn": "998821", "qty": 4200, "unit": "Mtr",
+             "rate": 14.50, "gst": 5},
+            {"desc": "Finishing & calendaring charges", "hsn": "998821", "qty": 4200, "unit": "Mtr", "rate": 3.25,
+             "gst": 5},
+            {"desc": "Shrinkage control (sanforising)", "hsn": "998821", "qty": 1800, "unit": "Mtr", "rate": 2.10,
+             "gst": 5},
+        ],
+    },
+    {
+        "file": "8_credit_note_igst.jpg",
+        "what": "CREDIT NOTE from a supplier (goods returned), IGST 18%, against bill KEC/26-27/0387.",
+        "color": (110, 30, 30),
+        "heading": "CREDIT NOTE",
+        "seller": {"name": "Kaveri Electricals & Co.", "address": "B-7, MIDC Bhosari, Pune - 411026, Maharashtra",
+                   "gstin": "27AAKFK5521M1Z3", "state": "Maharashtra", "phone": "+91 20 2712 4455"},
+        "buyer": DEMO, "number": "KEC/CN/0042", "date": "02-05-2026", "pos": "24-Gujarat", "terms": "-",
+        "ref": "Against Inv KEC/26-27/0387",
+        "items": [
+            {"desc": "MCB 32A DP - returned (defective)", "hsn": "8536", "qty": 6, "unit": "Pcs",
+             "rate": 465.00, "gst": 18, "disc": 5},
+        ],
+    },
+    {
+        "file": "9_dyes_chemicals_photocopy.jpg",
+        "what": "Dyes & chemicals purchase, GST 18%, grey low-contrast photocopy with speckles.",
+        "color": (40, 40, 40),
+        "seller": {"name": "Ankleshwar Dyestuff Corporation", "address": "Plot 3307, GIDC Ankleshwar - 393002, Gujarat",
+                   "gstin": "24AABCA6620E1ZS", "state": "Gujarat", "phone": "02646-221 900"},
+        "buyer": DEMO, "number": "ADC/2026/0977", "date": "22.06.2026", "pos": "24-Gujarat",
+        "items": [
+            {"desc": "Reactive Red ME4BL", "hsn": "3204", "qty": 150, "unit": "Kg", "rate": 412.00, "gst": 18},
+            {"desc": "Reactive Yellow ME4GL", "hsn": "3204", "qty": 120, "unit": "Kg", "rate": 389.00, "gst": 18},
+            {"desc": "Soda Ash Light", "hsn": "2836", "qty": 2000, "unit": "Kg", "rate": 31.40, "gst": 18},
+            {"desc": "Wetting Agent (non-ionic)", "hsn": "3402", "qty": 250, "unit": "Kg", "rate": 118.00, "gst": 18},
+        ],
+        "photocopy": True,
+    },
 ]
+
+
+def make_excel_samples():
+    """Two Excel files: a bill register (one row per bill / GST rate) and ledger-line vouchers."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        print("openpyxl not installed - skipping Excel samples")
+        return []
+
+    def book(path, heads, rows, widths):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(heads)
+        for r in rows:
+            ws.append(r)
+        for c in ws[1]:
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor="2457D6")
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+        ws.freeze_panes = "A2"
+        wb.save(path)
+        return path
+
+    bills = book(os.path.join(OUT, "10_excel_bill_register.xlsx"),
+                 ["Date", "Voucher Type", "Party", "Party GSTIN", "Bill No", "Taxable", "GST %", "CGST", "SGST",
+                  "IGST", "Round Off", "Total", "Narration"],
+                 [["01-07-2026", "Purchase", "Surat Yarn Mills LLP", "24AAPFS4471K1ZB", "SYM/26-27/1302", 184500, 5,
+                   "", "", "", "", "", "Cotton yarn 30s"],
+                  ["03-07-2026", "Purchase", "Rangoli Dyeing & Processing House", "24AAKFR9032P1Z4", "RDP/0451",
+                   52600, 5, "", "", "", "", "", "Dyeing job work July"],
+                  ["05-07-2026", "Purchase", "Kaveri Electricals & Co.", "27AAKFK5521M1Z3", "KEC/26-27/0455",
+                   12400, 12, "", "", "", "", "", "LED fittings"],
+                  ["05-07-2026", "Purchase", "Kaveri Electricals & Co.", "27AAKFK5521M1Z3", "KEC/26-27/0455",
+                   23850, 18, "", "", "", "", "", "Wires and MCBs (same bill, 18%)"],
+                  ["09-07-2026", "Purchase", "Ankleshwar Dyestuff Corporation", "24AABCA6620E1ZS", "ADC/2026/1033",
+                   96750, 18, 8707.50, 8707.50, "", 0, 114165, "Reactive dyes"],
+                  ["12-07-2026", "Sales", "Patel Hardware Stores", "24ABQPP9087L1Z2", "DT/S/1022", 41300, 18,
+                   "", "", "", "", "", "Steel sale"]],
+                 [12, 13, 34, 18, 18, 12, 8, 10, 10, 10, 10, 12, 30])
+    ledger = book(os.path.join(OUT, "11_excel_payments_receipts_journal.xlsx"),
+                  ["Voucher No", "Date", "Voucher Type", "Ledger", "Debit", "Credit", "Bill Ref", "Narration"],
+                  [["PMT-101", "10-07-2026", "Payment", "Surat Yarn Mills LLP", 193725, "", "SYM/26-27/1302",
+                    "NEFT UTR 6123344556"],
+                   ["PMT-101", "10-07-2026", "Payment", "HDFC Bank", "", 193725, "", ""],
+                   ["RCT-55", "15-07-2026", "Receipt", "HDFC Bank", 48734, "", "", "From Patel Hardware"],
+                   ["RCT-55", "15-07-2026", "Receipt", "Patel Hardware Stores", "", 48734, "DT/S/1022", ""],
+                   ["JV-12", "31-07-2026", "Journal", "Electricity Charges", 38600, "", "", "July power bill provision"],
+                   ["JV-12", "31-07-2026", "Journal", "Outstanding Expenses", "", 38600, "", ""],
+                   ["JV-13", "31-07-2026", "Journal", "Depreciation", 21500, "", "", "Monthly depreciation"],
+                   ["JV-13", "31-07-2026", "Journal", "Plant & Machinery", "", 21500, "", ""]],
+                  [12, 12, 13, 30, 12, 12, 18, 32])
+    print("10_excel_bill_register.xlsx, 11_excel_payments_receipts_journal.xlsx")
+    return [bills, ledger]
 
 
 def main():
@@ -371,6 +502,8 @@ def main():
     for inv in BILLS:
         pages, c = render(inv)
         path = os.path.join(OUT, inv["file"])
+        if inv.get("photocopy"):
+            pages = [photocopy(p) for p in pages]
         if inv.get("photo"):
             pages = [phone_photo(p) for p in pages]
         if path.endswith(".pdf"):
@@ -388,10 +521,12 @@ def main():
             "gst_breakup": c["breakup"],
         }
         print(f"{inv['file']:45s} {len(pages)}p  total {inr(c['grand_total']):>12s}")
+    written += make_excel_samples()
     zpath = os.path.join(OUT, "all_samples.zip")
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for p in written:
-            z.write(p, "bills/" + os.path.basename(p))
+            if not p.endswith(".xlsx"):
+                z.write(p, "bills/" + os.path.basename(p))
     with open(os.path.join(OUT, "expected.json"), "w", encoding="utf-8") as f:
         json.dump(expected, f, indent=2, ensure_ascii=False)
     print("all_samples.zip, expected.json")

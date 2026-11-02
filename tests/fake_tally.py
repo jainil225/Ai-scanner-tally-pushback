@@ -25,7 +25,8 @@ LEDGERS = [
     ("Freight Inward", "Direct Expenses", ""),
     ("Cash", "Cash-in-Hand", ""),
 ]
-GROUPS = {"Input GST": "Duties & Taxes", "Duties & Taxes": "", "Sundry Creditors": "Current Liabilities",
+# Mirrors real Tally: Duties & Taxes and Sundry Creditors sit under Current Liabilities
+GROUPS = {"Input GST": "Duties & Taxes", "Duties & Taxes": "Current Liabilities", "Sundry Creditors": "Current Liabilities",
           "Current Liabilities": "", "Purchase Accounts": "", "Sales Accounts": "",
           "Indirect Expenses": "", "Direct Expenses": "", "Cash-in-Hand": "Current Assets"}
 
@@ -34,6 +35,9 @@ class State:
     def __init__(self):
         self.ledgers = [dict(name=n, parent=p, gstin=g) for n, p, g in LEDGERS]
         self.imports = []          # raw XML bodies of Import Data requests
+        self.groups = dict(GROUPS)
+        self.units = ["Nos", "Kg"]
+        self.items = []
         self.reject_vouchers = False
 
 
@@ -56,8 +60,18 @@ def make_handler(state):
         def answer(self, body):
             if "<TALLYREQUEST>Import Data</TALLYREQUEST>" in body:
                 state.imports.append(body)
-                root = ET.fromstring(body)
+                root = ET.fromstring(body.replace("&#4;", ""))   # Tally's special char, invalid in XML 1.0
                 created, errors, msgs = 0, 0, []
+                for g in root.iter("GROUP"):
+                    state.groups[g.get("NAME")] = g.findtext("PARENT") or ""
+                    created += 1
+                for u in root.iter("UNIT"):
+                    state.units.append(u.get("NAME"))
+                    created += 1
+                for it in root.iter("STOCKITEM"):
+                    state.items.append({"name": it.get("NAME"), "parent": it.findtext("PARENT") or "",
+                                        "unit": it.findtext("BASEUNITS") or ""})
+                    created += 1
                 for led in root.iter("LEDGER"):
                     state.ledgers.append({"name": led.get("NAME"), "parent": led.findtext("PARENT"),
                                           "gstin": led.findtext("PARTYGSTIN") or ""})
@@ -83,7 +97,14 @@ def make_handler(state):
                 items = "".join(f'<LEDGER NAME="{_x(l["name"])}"><PARENT>{_x(l["parent"])}</PARENT>'
                                 f'<PARTYGSTIN>{_x(l["gstin"])}</PARTYGSTIN></LEDGER>' for l in state.ledgers)
             elif typ == "Group":
-                items = "".join(f'<GROUP NAME="{_x(n)}"><PARENT>{_x(p)}</PARENT></GROUP>' for n, p in GROUPS.items())
+                items = "".join(f'<GROUP NAME="{_x(n)}"><PARENT>{_x(p)}</PARENT></GROUP>' for n, p in state.groups.items())
+            elif typ == "Unit":
+                items = "".join(f'<UNIT NAME="{_x(n)}"><NAME>{_x(n)}</NAME></UNIT>' for n in state.units)
+            elif typ == "StockItem":
+                items = "".join(f'<STOCKITEM NAME="{_x(i["name"])}"><PARENT>{_x(i["parent"])}</PARENT>'
+                                f'<BASEUNITS>{_x(i["unit"])}</BASEUNITS></STOCKITEM>' for i in state.items)
+            elif typ == "StockGroup":
+                items = '<STOCKGROUP NAME="Steel"><PARENT></PARENT></STOCKGROUP>'
             elif typ == "VoucherType":
                 items = "".join(f'<VOUCHERTYPE NAME="{n}"><PARENT>{n}</PARENT></VOUCHERTYPE>'
                                 for n in ("Purchase", "Sales", "Journal", "Credit Note", "Debit Note"))

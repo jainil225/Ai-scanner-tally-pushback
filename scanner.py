@@ -23,6 +23,7 @@ from datetime import datetime
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory, Response
 
 import ai_extract
+import excel_import
 import file_prep
 import mapping
 import tally_push
@@ -38,6 +39,7 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.environ.get("SCANNER_DATA") or os.path.join(BASE_DIR, "data")
 DOCS_DIR = os.path.join(DATA_DIR, "docs")
+SAMPLES_DIR = os.path.join(BASE_DIR, "samples")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 HISTORY_FILE = os.path.join(DATA_DIR, "push_history.json")
 os.makedirs(DOCS_DIR, exist_ok=True)
@@ -52,7 +54,7 @@ DEFAULT_SETTINGS = {
     "own_gstin": "",
     "gemini_rpm": 5,              # free tier allows 5 requests/minute; 0 = no pacing
     "push_as_optional": True,
-    "create_missing_ledgers": True,
+    "create_missing_ledgers": False,   # safer: user creates masters explicitly (red = missing)
     "default_purchase_ledger": "",
     "default_sales_ledger": "",
     "default_roundoff_ledger": "",
@@ -248,8 +250,168 @@ def tally_ledgers():
         return err(e, 502)
     return jsonify({"ok": True, "company": company,
                     "ledgers": [{"name": l["name"], "parent": l["parent"], "primary": l["primary"],
-                                 "gstin": l["gstin"]} for l in book.all],
+                                 "gstin": l["gstin"], "state": l.get("state", "")} for l in book.all],
+                    "groups": sorted(set(book.groups) | PRIMARY_GROUPS),
+                    "group_parents": book.groups,
                     "voucher_types": vtypes})
+
+
+# Tally's built-in groups, so the group list is useful even if Tally sends none
+PRIMARY_GROUPS = {"Sundry Creditors", "Sundry Debtors", "Purchase Accounts", "Sales Accounts", "Duties & Taxes",
+                  "Direct Expenses", "Indirect Expenses", "Direct Incomes", "Indirect Incomes", "Bank Accounts",
+                  "Cash-in-Hand", "Current Assets", "Current Liabilities", "Fixed Assets", "Investments",
+                  "Loans & Advances (Asset)", "Loans (Liability)", "Secured Loans", "Unsecured Loans",
+                  "Provisions", "Capital Account", "Reserves & Surplus", "Deposits (Asset)", "Stock-in-Hand",
+                  "Bank OD A/c", "Branch / Divisions", "Suspense A/c", "Misc. Expenses (ASSET)"}
+
+
+@app.get("/api/tally/masters")
+def tally_masters():
+    """Stock items, stock groups and units (for the Masters page)."""
+    company = request.args.get("company") or load_settings()["company"]
+    if not company:
+        return err("Choose a company first")
+    t, out = tally(), {"ok": True}
+    for key, fn in (("stock_items", t.stock_items), ("stock_groups", t.stock_groups), ("units", t.units)):
+        try:
+            out[key] = fn(company)
+        except tally_push.TallyError as e:
+            out[key], out["error"] = [], str(e)
+    return jsonify(out)
+
+
+def _create_masters(company, items):
+    """items = [(kind, data)] -> list of per-item results. Ledgers are refreshed afterwards."""
+    t, results = tally(), []
+    book = None
+    try:
+        book = ledger_book(company)[1]
+    except tally_push.TallyError:
+        pass
+    for kind, data in items:
+        data = dict(data or {})
+        name = (data.get("name") or "").strip()
+        res = {"kind": kind, "name": name, "ok": False}
+        results.append(res)
+        if kind == "ledger" and book:
+            if book.exists(name):
+                res.update(ok=True, existed=True)
+                continue
+            # parent may be a sub-group: tell the builder which primary group it belongs to
+            data["primary"] = mapping.primary_group(data.get("parent", ""), book.groups)
+        try:
+            r = t.create_master(company, kind, data)
+        except tally_push.TallyError as e:
+            res["error"] = str(e)
+            continue
+        if r["errors"] or not (r["created"] or r["altered"]):
+            res["error"] = "; ".join(r["messages"]) or f"Tally did not create it (created={r['created']})"
+        else:
+            res["ok"] = True
+    try:
+        ledger_book(company, refresh=True)
+    except tally_push.TallyError:
+        pass
+    return results
+
+
+@app.post("/api/masters")
+def create_masters():
+    """Body: {kind, data} for one master, or {items: [{kind, data}, ...]} for several."""
+    body = request.get_json(force=True) or {}
+    company = body.get("company") or load_settings()["company"]
+    if not company:
+        return err("Choose the Tally company first")
+    items = [(i.get("kind", "ledger"), i.get("data") or {}) for i in body.get("items") or []] \
+        or [(body.get("kind", "ledger"), body.get("data") or {})]
+    results = _create_masters(company, items)
+    return jsonify({"ok": all(r["ok"] for r in results), "results": results})
+
+
+# ── Excel / CSV import ──────────────────────────────────────────────────────
+def _new_doc(name, pages=None, **extra):
+    doc_id = uuid.uuid4().hex
+    folder = os.path.join(DOCS_DIR, doc_id)
+    os.makedirs(folder)
+    for i, jpg in enumerate(pages or []):
+        with open(os.path.join(folder, f"page_{i + 1}.jpg"), "wb") as out:
+            out.write(jpg)
+    meta = {"id": doc_id, "name": name, "pages": len(pages or []), "status": "new", "source": "scan",
+            "created": datetime.now().isoformat(timespec="seconds"),
+            "bill": None, "draft": None, "error": "", "push": None}
+    meta.update(extra)
+    save_doc(meta)
+    return meta
+
+
+def _import_excel(filename, data, s):
+    book = mapping.LedgerBook([])
+    if s["company"]:
+        try:
+            book = ledger_book(s["company"])[1]
+        except tally_push.TallyError:
+            pass
+    items, skipped = excel_import.parse(filename, data, s, book)
+    created = []
+    for it in items:
+        created.append(_new_doc(it["name"], source="excel", file=filename, rows=it["rows"],
+                                row_numbers=it["row_numbers"], bill=it["bill"], draft=it["draft"],
+                                status="ready"))
+    return created, skipped
+
+
+@app.post("/api/import/excel")
+def import_excel():
+    files = request.files.getlist("files")
+    if not files:
+        return err("No file received")
+    s, created, skipped = load_settings(), [], []
+    for f in files:
+        try:
+            c, sk = _import_excel(f.filename or "import.xlsx", f.read(), s)
+        except excel_import.ImportError_ as e:
+            skipped.append(f"{f.filename}: {e}")
+            continue
+        created += c
+        skipped += [f"{f.filename}: {x}" for x in sk]
+    if not created and skipped:
+        return err("; ".join(skipped))
+    return jsonify({"ok": True, "documents": created, "skipped": skipped})
+
+
+@app.get("/api/import/template/<kind>")
+def import_template(kind):
+    if kind not in excel_import.TEMPLATES:
+        abort(404)
+    data = excel_import.template_xlsx(kind)
+    name = "bill_register_template.xlsx" if kind == "bills" else "ledger_lines_template.xlsx"
+    return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename={name}"})
+
+
+@app.post("/api/samples/load")
+def load_samples():
+    """Add the bundled sample bills (and sample Excel files) to the list, for trying the app."""
+    if not os.path.isdir(SAMPLES_DIR):
+        return err("Sample files are not installed")
+    s, created, skipped = load_settings(), [], []
+    for fn in sorted(os.listdir(SAMPLES_DIR)):
+        path = os.path.join(SAMPLES_DIR, fn)
+        ext = os.path.splitext(fn)[1].lower()
+        with open(path, "rb") as f:
+            data = f.read()
+        try:
+            if ext in (".xlsx", ".csv"):
+                c, sk = _import_excel(fn, data, s)
+                created += c
+                skipped += sk
+            elif ext in file_prep.IMAGE_EXT | file_prep.PDF_EXT:
+                docs, sk = file_prep.load_file(fn, data)
+                created += [_new_doc(d.name, d.pages, sample=True) for d in docs]
+                skipped += sk
+        except (file_prep.PrepError, excel_import.ImportError_) as e:
+            skipped.append(str(e))
+    return jsonify({"ok": True, "documents": created, "skipped": skipped})
 
 
 # ── documents ───────────────────────────────────────────────────────────────
@@ -268,19 +430,8 @@ def upload():
             continue
         skipped.extend(sk)
         for d in docs:
-            if not d.pages:
-                continue
-            doc_id = uuid.uuid4().hex
-            folder = os.path.join(DOCS_DIR, doc_id)
-            os.makedirs(folder)
-            for i, jpg in enumerate(d.pages):
-                with open(os.path.join(folder, f"page_{i + 1}.jpg"), "wb") as out:
-                    out.write(jpg)
-            meta = {"id": doc_id, "name": d.name, "pages": len(d.pages), "status": "new",
-                    "created": datetime.now().isoformat(timespec="seconds"),
-                    "bill": None, "draft": None, "error": "", "push": None}
-            save_doc(meta)
-            created.append(meta)
+            if d.pages:
+                created.append(_new_doc(d.name, d.pages))
     return jsonify({"ok": True, "documents": created, "skipped": skipped})
 
 
@@ -311,6 +462,8 @@ def doc_page(doc_id, n):
 @app.post("/api/docs/<doc_id>/scan")
 def doc_scan(doc_id):
     meta = load_doc(doc_id)
+    if not meta.get("pages"):
+        return err("This entry came from Excel - there is no image to scan")
     s = load_settings()
     provider = s["provider"]
     key = s["gemini_key"] if provider == "gemini" else s["claude_key"]
@@ -387,7 +540,7 @@ def doc_remap(doc_id):
     """Rebuild the draft from the AI result (e.g. after choosing a company)."""
     meta = load_doc(doc_id)
     if not meta.get("bill"):
-        return err("Scan the document first")
+        return err("Nothing to re-map: scan the bill first (Excel ledger-line vouchers are used as typed)")
     try:
         meta["draft"] = make_draft(meta["bill"], load_settings())
     except tally_push.TallyError as e:
@@ -426,7 +579,8 @@ def _clean_entries(draft):
             raise tally_push.TallyError(f"Amount '{e.get('amount')}' is not a number")
         if amt and (e.get("ledger") or "").strip():
             out.append({"ledger": e["ledger"].strip(), "dr_cr": "Dr" if e.get("dr_cr") == "Dr" else "Cr",
-                        "amount": amt, "bill_ref": (e.get("bill_ref") or "").strip()})
+                        "amount": amt, "bill_ref": (e.get("bill_ref") or "").strip(),
+                        "bill_type": e.get("bill_type") or "New Ref"})
     return out
 
 

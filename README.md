@@ -72,9 +72,26 @@ A purchase bill of ₹10,000 + 9% CGST + 9% SGST with a 40-paise round-off becom
 Vouchers are posted in **accounting mode** (ledger lines, no stock items). The item list read from the bill is shown
 in the app for reference.
 
+## The app
+
+| Page | What you do there |
+|---|---|
+| **Bills** | Add bills (photos, PDF, ZIP), AI reads them, check each voucher beside the bill, push to Tally. Counters on top (Ready / Needs attention / In Tally / Errors) filter the list. |
+| **Excel Import** | Import a bill register or ledger-line vouchers (journals, payments, receipts) from .xlsx / .csv. No AI needed. Templates can be downloaded on the page. |
+| **Masters** | Create ledgers (with GSTIN, state, PAN, address, bill-wise, opening balance), groups, stock items (HSN, GST rate) and units directly in Tally, and browse the existing ones. |
+| **History** | Everything pushed from this PC. |
+| **Settings** | AI keys (Gemini / Claude, one can be the backup), Tally URL, your GSTIN, default ledgers and voucher types. |
+
+**Red = not in Tally.** Any ledger used in an entry that does not exist in the selected company is shown in red, with a
+**Create** button (one ledger, full details) or **Create all in Tally** (review names and groups together). Pushing an
+entry with missing ledgers first asks you to create them, unless *Auto-create ledgers* is switched on (off by default,
+so nothing is added to a client's company without you seeing it).
+
+Keyboard: ↑ / ↓ move between bills, Ctrl+Enter pushes the open bill, Esc closes the side panel.
+
 ## Sample bills
 
-`samples/` has five fictional GST bills to try the app with (all marked SAMPLE), plus `all_samples.zip`:
+Click **Load sample bills** in the app, or use the files in `samples/` (all fictional, marked SAMPLE):
 
 | File | Tests |
 |---|---|
@@ -83,19 +100,25 @@ in the app for reference.
 | `3_purchase_two_pages_5_18pct_freight.pdf` | 2-page scanned PDF, 22 items, 5% + 18%, freight |
 | `4_sales_invoice_by_demo_traders.jpg` | A sales bill (set own GSTIN `24AAAAA0000A1Z5` in Settings) |
 | `5_courier_bill_phone_photo.jpg` | Service bill (SAC) photographed on a phone: tilted, shadowed |
+| `6_textile_yarn_purchase_5pct.jpg` | Textile: cotton / polyester yarn in Kg, GST 5% |
+| `7_job_work_dyeing_bill_5pct.png` | Textile job work (dyeing, SAC 998821), GST 5% |
+| `8_credit_note_igst.jpg` | Supplier's credit note (goods returned) → entered as a **Debit Note** in your books |
+| `9_dyes_chemicals_photocopy.jpg` | Grey, speckled photocopy - a hard read for the AI |
+| `10_excel_bill_register.xlsx` | Excel bill register: 5 purchase bills (one with two GST rates) and a sale |
+| `11_excel_payments_receipts_journal.xlsx` | Excel ledger lines: payment, receipt and journals with bill references |
 
-`samples/expected.json` holds the correct totals for each bill so you can check what the AI read.
-Regenerate them with `python samples/make_samples.py`.
+`samples/expected.json` holds the correct totals for each image bill. Regenerate with `python samples/make_samples.py`.
 
 ## Files
 
 | File | What it does |
 |---|---|
-| `scanner.py` | Flask app on 127.0.0.1:5090 – upload, scan, drafts, push, history |
+| `scanner.py` | Flask app on 127.0.0.1:5090 – upload, scan, Excel import, masters, drafts, push, history |
+| `excel_import.py` | Excel / CSV → vouchers (bill register or ledger lines), templates |
 | `file_prep.py` | Images, PDFs (each page rendered to JPG with PyMuPDF) and ZIPs → pages |
 | `ai_extract.py` | Gemini / Claude vision call (plain HTTPS), JSON parsing, number/date/GSTIN checks |
 | `mapping.py` | Bill → balanced voucher using the company's ledgers |
-| `tally_push.py` | Tally XML: read companies, ledgers, groups, voucher types; create ledgers; import vouchers |
+| `tally_push.py` | Tally XML: read companies, ledgers, groups, stock items, units; create masters; import vouchers |
 | `index.html` | The whole UI |
 | `tests/` | Unit + end-to-end tests against a fake Tally server (`python -m unittest discover -s tests -v`) |
 | `build.bat` | Builds `dist\AIBillScanner.exe` with PyInstaller |
