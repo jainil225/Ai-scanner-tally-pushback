@@ -12,6 +12,7 @@ the rest of the app can trust the shape of the result.
 """
 import base64
 import json
+import random
 import re
 import threading
 import time
@@ -98,6 +99,7 @@ def _b64(jpg):
 # Free Gemini keys allow only a few requests per minute (5 for flash today).
 # We pace our own requests under that limit instead of hitting it and failing.
 GEMINI_RPM = 5            # set from Settings by scanner.py; 0 = no pacing (paid keys)
+OVERLOAD_WAITS = [5, 15]  # waits on 503 "high demand" before trying another model
 MAX_WAIT = 90             # longest we will sleep for one rate-limit pause (seconds)
 _pace_lock = threading.Lock()
 _recent = deque()         # timestamps of recent Gemini requests
@@ -181,10 +183,18 @@ def _post_with_retry(url, headers, payload):
             raise AIError("The AI is still rate-limiting this key. Free Gemini allows only a few bills per minute: "
                           "lower 'Requests per minute' in Settings, wait a minute and press Re-scan. "
                           f"({msg[:200]})", status=429)
-        if r.status_code in (500, 502, 503, 504, 529) and attempt < RETRIES:
-            last = f"HTTP {r.status_code}"
-            time.sleep(2 ** (attempt + 1))
-            continue
+        if r.status_code in (500, 502, 503, 504, 529):
+            # Overloaded ("high demand"): a short wait often clears it. After a couple
+            # of tries extract() moves to another model rather than waiting longer here.
+            overloaded = r.status_code in (503, 529)
+            waits = OVERLOAD_WAITS if overloaded else [2, 4, 8]
+            if attempt < len(waits):
+                wait = waits[attempt] + random.uniform(0, 2)
+                _status(f"AI model busy ({r.status_code}): retrying in {wait:.0f}s")
+                last = f"HTTP {r.status_code}"
+                time.sleep(wait)
+                continue
+            raise AIError(f"AI model busy ({r.status_code}): {msg}", status=r.status_code)
         if r.status_code in (401, 403):
             raise AIError(f"API key rejected ({r.status_code}): {msg}", status=r.status_code)
         raise AIError(f"AI request failed ({r.status_code}): {msg}", status=r.status_code)
@@ -391,21 +401,39 @@ def extract(pages, provider, api_key, model=None, extra_hint=""):
     model = model or PROVIDERS[provider]["default"]
     prompt = PROMPT + (f"\nContext about the user's company: {extra_hint}\n" if extra_hint else "")
     call = _call_gemini if provider == "gemini" else _call_claude
-    tried = []
+    tried, switched = [], None
     while True:
         tried.append(model)
         try:
             raw = call(pages, api_key, model, prompt)
             break
         except AIError as e:
-            if provider != "gemini" or not _model_gone(e) or len(tried) >= 4:
+            if provider != "gemini" or len(tried) >= 4:
                 raise
-            nxt = _suggested_model(e, model)
+            if _model_gone(e):
+                reason = "retired"
+                nxt = _suggested_model(e, model)
+            elif is_overloaded(e):
+                reason = "busy"
+                nxt = None
+            else:
+                raise
             if not nxt or nxt in tried:
-                nxt = next((m for m in gemini_models(api_key) if m not in tried), None)
+                try:
+                    nxt = next((m for m in gemini_models(api_key) if m not in tried), None)
+                except AIError:
+                    nxt = None
             if not nxt:
-                raise AIError(f"{e} (no other Gemini model available for this key)")
+                raise AIError(f"{e} (no other Gemini model available for this key)", status=e.status)
+            _status(f"Gemini model {model} {'retired' if reason == 'retired' else 'busy'}: trying {nxt}")
+            switched = switched or reason
             model = nxt
     out = normalise(parse_json_reply(raw))
     out["_model"] = model            # the model that actually answered
+    out["_switched"] = switched      # None, "retired" or "busy"
     return out
+
+
+def is_overloaded(e):
+    return getattr(e, "status", None) in (500, 502, 503, 504, 529) or "high demand" in str(e).lower() \
+        or "overloaded" in str(e).lower()

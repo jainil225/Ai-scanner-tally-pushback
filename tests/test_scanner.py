@@ -275,6 +275,56 @@ class RateLimitTests(unittest.TestCase):
         self.assertEqual(self.sleeps, [])
 
 
+class OverloadTests(unittest.TestCase):
+    OK = {"candidates": [{"content": {"parts": [{"text": '{"grand_total": 4}'}]}}]}
+    BUSY = {"error": {"code": 503, "message": "This model is currently experiencing high demand. Spikes in demand "
+                      "are usually temporary. Please try again later.", "status": "UNAVAILABLE"}}
+
+    def setUp(self):
+        self.orig = (ai_extract.requests.post, ai_extract.time.sleep, ai_extract.gemini_models, ai_extract.GEMINI_RPM)
+        self.sleeps, self.urls = [], []
+        ai_extract.time.sleep = lambda x: self.sleeps.append(x)
+        ai_extract.gemini_models = lambda key: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.8-flash-lite"]
+        ai_extract.GEMINI_RPM = 0
+
+    def tearDown(self):
+        ai_extract.requests.post, ai_extract.time.sleep, ai_extract.gemini_models, ai_extract.GEMINI_RPM = self.orig
+
+    def serve(self, busy_models):
+        def post(url, **k):
+            self.urls.append(url)
+            if "anthropic" in url:
+                return FakeResp(200, {"content": [{"type": "text", "text": '{"grand_total": 8}'}]})
+            busy = any(f"/{m}:" in url for m in busy_models)
+            return FakeResp(503, self.BUSY) if busy else FakeResp(200, self.OK)
+        ai_extract.requests.post = post
+
+    def test_busy_model_retries_then_switches_model(self):
+        self.serve(["gemini-3.8-flash"])
+        out = ai_extract.extract([b"j"], "gemini", "K", "gemini-3.8-flash")
+        self.assertEqual(out["_model"], "gemini-3.5-flash")
+        self.assertEqual(out["_switched"], "busy")
+        self.assertEqual(sum("gemini-3.8-flash:" in u for u in self.urls), 3)   # 1 try + 2 retries
+        self.assertEqual(len(self.sleeps), 2)
+
+    def test_all_gemini_busy_falls_back_to_claude(self):
+        import scanner
+        self.serve(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.8-flash-lite"])
+        s = dict(scanner.DEFAULT_SETTINGS, gemini_key="G", claude_key="C")
+        bill = scanner.read_bill([b"j"], s, "gemini", "G", "")
+        self.assertEqual(bill["grand_total"], 8)
+        self.assertIn("Read by Claude because Gemini was busy", bill["warnings"][0])
+        self.assertNotEqual(scanner.load_settings().get("model"), "gemini-3.5-flash")   # busy switch not saved
+
+    def test_all_busy_without_backup_key_gives_clear_message(self):
+        import scanner
+        self.serve(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.8-flash-lite"])
+        s = dict(scanner.DEFAULT_SETTINGS, gemini_key="G")
+        with self.assertRaises(ai_extract.AIError) as cm:
+            scanner.read_bill([b"j"], s, "gemini", "G", "")
+        self.assertIn("overloaded right now", str(cm.exception))
+
+
 class MappingTests(unittest.TestCase):
     def test_intra_state_purchase(self):
         d = mapping.build_draft(bill(), book_from_fake())

@@ -324,13 +324,7 @@ def doc_scan(doc_id):
     save_doc(meta)
     try:
         ai_extract.GEMINI_RPM = int(s.get("gemini_rpm", 5) or 0)
-        bill = ai_extract.extract(pages, provider, key, s["model"] or None, hint)
-        used = bill.pop("_model", None)
-        if used and used != (s["model"] or ai_extract.PROVIDERS[provider]["default"]):
-            # The chosen model was retired and we switched; remember the working one.
-            s2 = load_settings()
-            s2["model"] = used
-            _write_json(SETTINGS_FILE, s2)
+        bill = read_bill(pages, s, provider, key, hint)
     except ai_extract.AIError as e:
         meta.update(status="error", error=str(e))
         save_doc(meta)
@@ -347,6 +341,35 @@ def doc_scan(doc_id):
     meta["status"] = "ready"
     save_doc(meta)
     return jsonify({"ok": True, "document": meta})
+
+
+def read_bill(pages, s, provider, key, hint):
+    """Run the AI; fall back to the other provider when the chosen one is overloaded."""
+    note = ""
+    try:
+        bill = ai_extract.extract(pages, provider, key, s["model"] or None, hint)
+    except ai_extract.AIError as e:
+        other = "claude" if provider == "gemini" else "gemini"
+        other_key = s[f"{other}_key"]
+        if not ai_extract.is_overloaded(e):
+            raise
+        if not other_key:
+            raise ai_extract.AIError(
+                f"{provider.title()} is overloaded right now (too many users). This is on Google's side and usually "
+                f"clears in a few minutes: wait, then press Re-scan. Tip: add a {other.title()} key in Settings as a "
+                f"backup and the scanner will switch to it automatically. ({e})", status=e.status)
+        ai_extract._status(f"{provider.title()} is busy: reading this bill with {other.title()} instead")
+        bill = ai_extract.extract(pages, other, other_key, None, hint)
+        note = f"Read by {other.title()} because {provider.title()} was busy"
+    used, why = bill.pop("_model", None), bill.pop("_switched", None)
+    if why == "retired" and not note:
+        # The chosen model no longer exists and we switched; remember the working one.
+        s2 = load_settings()
+        s2["model"] = used
+        _write_json(SETTINGS_FILE, s2)
+    if note:
+        bill["warnings"] = [note] + bill["warnings"]
+    return bill
 
 
 def make_draft(bill, s):

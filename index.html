@@ -138,11 +138,12 @@ a{color:var(--accent)}
       <label><input type="radio" name="provider" value="claude">Anthropic Claude<br><span class="hint">Paid — very accurate</span></label>
     </div>
     <div class="grid" style="margin-top:10px">
-      <div class="f full" id="fGemini"><label>Gemini API key · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></label><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></div>
-      <div class="f full" id="fClaude"><label>Claude API key · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></label><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
+      <div class="f full" id="fGemini"><label>Gemini API key<span id="bkGemini"></span> · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></label><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></div>
+      <div class="f full" id="fClaude"><label>Claude API key<span id="bkClaude"></span> · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></label><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
       <div class="f"><label>Model (blank = automatic)</label><input id="sModel" list="dlModels" placeholder="default"><datalist id="dlModels"></datalist></div>
       <div class="f"><label>Gemini requests per minute</label><input id="sRpm" type="number" min="0" max="1000"><span class="hint">Free key: 5. Paid key: 0 (no limit).</span></div>
     </div>
+    <p class="hint">Tip: fill in both keys. If the chosen AI is busy, the scanner reads the bill with the other one.</p>
     <p class="hint">Keys are saved only on this PC (<span id="dataDir"></span>) and sent only to the AI provider you choose.</p>
     <h3>Tally</h3>
     <div class="grid">
@@ -491,7 +492,8 @@ function openSettings(){
 }
 function providerChanged(){
   const p=(document.querySelector("[name=provider]:checked")||{}).value||"gemini";
-  $("#fGemini").style.display = p==="gemini"?"":"none"; $("#fClaude").style.display = p==="claude"?"":"none";
+  // Both keys stay visible: the one not selected is a backup used when the main AI is busy
+  $("#bkGemini").textContent = p==="gemini" ? "" : " (backup)"; $("#bkClaude").textContent = p==="claude" ? "" : " (backup)";
   const pr=S.info.providers[p]; $("#dlModels").innerHTML=pr.models.map(m=>`<option>${m}</option>`).join(""); $("#sModel").placeholder=pr.default;
   if (Object.entries(S.info.providers).some(([k,x])=>k!==p && x.models.includes($("#sModel").value))) $("#sModel").value="";
   if (p==="gemini" && S.settings.gemini_key_set) {
