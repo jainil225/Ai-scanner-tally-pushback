@@ -325,6 +325,57 @@ class OverloadTests(unittest.TestCase):
         self.assertIn("overloaded right now", str(cm.exception))
 
 
+class DailyQuotaTests(OverloadTests):
+    DAILY = {"error": {"code": 429, "message": "You exceeded your current quota. Quota exceeded for metric: "
+                       "generativelanguage.googleapis.com/generate_content_free_tier_requests_per_day, limit: 20"}}
+
+    def setUp(self):
+        super().setUp()
+        ai_extract._exhausted.clear()
+
+    def tearDown(self):
+        super().tearDown()
+        ai_extract._exhausted.clear()
+
+    def serve_quota(self, used_up):
+        def post(url, **k):
+            self.urls.append(url)
+            if "anthropic" in url:
+                return FakeResp(200, {"content": [{"type": "text", "text": '{"grand_total": 8}'}]})
+            if any(f"/{m}:" in url for m in used_up):
+                return FakeResp(429, self.DAILY)
+            return FakeResp(200, self.OK)
+        ai_extract.requests.post = post
+
+    def test_daily_quota_moves_to_next_model_and_remembers(self):
+        self.serve_quota(["gemini-3.8-flash"])
+        out = ai_extract.extract([b"j"], "gemini", "KEY12345", "gemini-3.8-flash")
+        self.assertEqual(out["_model"], "gemini-3.5-flash")
+        self.assertEqual(out["_switched"], "quota")
+        self.assertEqual(self.sleeps, [])                       # no pointless waiting
+        self.urls.clear()
+        ai_extract.extract([b"j"], "gemini", "KEY12345", "gemini-3.8-flash")
+        self.assertEqual(len(self.urls), 1)                      # went straight to the model with allowance
+        self.assertIn("gemini-3.5-flash:", self.urls[0])
+
+    def test_all_models_used_up_falls_back_to_claude(self):
+        import scanner
+        self.serve_quota(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.8-flash-lite"])
+        s = dict(scanner.DEFAULT_SETTINGS, gemini_key="G", claude_key="C")
+        bill = scanner.read_bill([b"j"], s, "gemini", "G", "")
+        self.assertEqual(bill["grand_total"], 8)
+        self.assertIn("out of free quota", bill["warnings"][0])
+
+    def test_all_models_used_up_without_backup(self):
+        import scanner
+        self.serve_quota(["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.8-flash-lite"])
+        s = dict(scanner.DEFAULT_SETTINGS, gemini_key="G")
+        with self.assertRaises(ai_extract.AIError) as cm:
+            scanner.read_bill([b"j"], s, "gemini", "G", "")
+        self.assertIn("every Gemini model", str(cm.exception))
+        self.assertIn("gemini-3.8-flash-lite", str(cm.exception))
+
+
 class MappingTests(unittest.TestCase):
     def test_intra_state_purchase(self):
         d = mapping.build_draft(bill(), book_from_fake())

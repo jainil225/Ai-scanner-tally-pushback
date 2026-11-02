@@ -43,9 +43,10 @@ RETRIES = 3          # on 429 / 5xx (free tiers rate-limit quickly)
 
 
 class AIError(RuntimeError):
-    def __init__(self, msg, status=None):
+    def __init__(self, msg, status=None, kind=None):
         super().__init__(msg)
         self.status = status
+        self.kind = kind          # e.g. "daily_quota"
 
 
 PROMPT = """You are an expert Indian accountant reading a bill / invoice image for entry into TallyPrime.
@@ -147,6 +148,35 @@ def _retry_delay(r, body):
     return None
 
 
+# Free-tier daily limits are per model. Remember which models ran out today so
+# later bills go straight to one that still has allowance.
+_exhausted = {}           # (key fingerprint, model) -> unix time when the quota resets
+
+
+def _next_pacific_midnight():
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import timedelta
+        now = datetime.now(ZoneInfo("America/Los_Angeles"))
+        return (now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).timestamp()
+    except Exception:                    # no tz database (plain Windows Python): assume PST
+        t = time.time()
+        return (int((t - 8 * 3600) // 86400) + 1) * 86400 + 8 * 3600
+
+
+def _fp(api_key):
+    return api_key[-8:]
+
+
+def mark_exhausted(api_key, model):
+    _exhausted[(_fp(api_key), model)] = _next_pacific_midnight()
+
+
+def is_exhausted(api_key, model):
+    until = _exhausted.get((_fp(api_key), model))
+    return bool(until and time.time() < until)
+
+
 def _is_daily_quota(body):
     t = json.dumps(body).lower()
     return "per_day" in t or "perday" in t or "per day" in t
@@ -173,7 +203,7 @@ def _post_with_retry(url, headers, payload):
             if _is_daily_quota(body):
                 raise AIError("Daily free limit of this Gemini key is used up. It resets at midnight US Pacific "
                               "time (about 1:30 pm IST). To keep going now: enable billing on the key, use another "
-                              f"key, or switch to Claude in Settings. ({msg[:200]})", status=429)
+                              f"key, or switch to Claude in Settings. ({msg[:200]})", status=429, kind="daily_quota")
             wait = _retry_delay(r, body) or 2 ** (attempt + 2)
             if attempt < RETRIES and wait <= MAX_WAIT:
                 _status(f"Rate limited by the AI: waiting {wait:.0f}s and retrying")
@@ -401,37 +431,58 @@ def extract(pages, provider, api_key, model=None, extra_hint=""):
     model = model or PROVIDERS[provider]["default"]
     prompt = PROMPT + (f"\nContext about the user's company: {extra_hint}\n" if extra_hint else "")
     call = _call_gemini if provider == "gemini" else _call_claude
-    tried, switched = [], None
+    tried, switched, used_up = [], None, []
+
+    def next_model(suggested=None):
+        if suggested and suggested not in tried and not is_exhausted(api_key, suggested):
+            return suggested
+        try:
+            names = [m for m in gemini_models(api_key) if m.startswith("gemini")]
+        except AIError:
+            return None
+        return next((m for m in names if m not in tried and not is_exhausted(api_key, m)), None)
+
+    if provider == "gemini" and is_exhausted(api_key, model):
+        model = next_model() or model        # skip a model already used up today
     while True:
         tried.append(model)
         try:
             raw = call(pages, api_key, model, prompt)
             break
         except AIError as e:
-            if provider != "gemini" or len(tried) >= 4:
+            if provider != "gemini" or len(tried) >= 5:
                 raise
-            if _model_gone(e):
-                reason = "retired"
-                nxt = _suggested_model(e, model)
+            if getattr(e, "kind", None) == "daily_quota":
+                reason, nxt = "quota", None
+                mark_exhausted(api_key, model)
+                used_up.append(model)
+            elif _model_gone(e):
+                reason, nxt = "retired", _suggested_model(e, model)
             elif is_overloaded(e):
-                reason = "busy"
-                nxt = None
+                reason, nxt = "busy", None
             else:
                 raise
-            if not nxt or nxt in tried:
-                try:
-                    nxt = next((m for m in gemini_models(api_key) if m not in tried), None)
-                except AIError:
-                    nxt = None
+            nxt = next_model(nxt)
             if not nxt:
-                raise AIError(f"{e} (no other Gemini model available for this key)", status=e.status)
-            _status(f"Gemini model {model} {'retired' if reason == 'retired' else 'busy'}: trying {nxt}")
+                if used_up:
+                    raise AIError(f"Daily free limit is used up for every Gemini model this key can use "
+                                  f"({', '.join(used_up)}). It resets at midnight US Pacific time (about 1:30 pm "
+                                  "IST). To keep going now: add a Claude key in Settings, use another Gemini key, "
+                                  "or enable billing on this one.", status=429, kind="daily_quota")
+                raise AIError(f"{e} (no other Gemini model available for this key)", status=e.status, kind=e.kind)
+            label = {"retired": "retired", "busy": "busy", "quota": "used up for today"}[reason]
+            _status(f"Gemini model {model} {label}: trying {nxt}")
             switched = switched or reason
             model = nxt
     out = normalise(parse_json_reply(raw))
     out["_model"] = model            # the model that actually answered
-    out["_switched"] = switched      # None, "retired" or "busy"
+    out["_switched"] = switched      # None, "retired", "busy" or "quota"
     return out
+
+
+def should_fall_back(e):
+    """Errors where another provider could succeed: overload or used-up quota."""
+    return is_overloaded(e) or getattr(e, "kind", None) == "daily_quota" or getattr(e, "status", None) == 429
 
 
 def is_overloaded(e):

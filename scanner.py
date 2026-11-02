@@ -351,18 +351,21 @@ def read_bill(pages, s, provider, key, hint):
     except ai_extract.AIError as e:
         other = "claude" if provider == "gemini" else "gemini"
         other_key = s[f"{other}_key"]
-        if not ai_extract.is_overloaded(e):
+        if not ai_extract.should_fall_back(e):
+            raise
+        if not other_key and e.kind == "daily_quota":
             raise
         if not other_key:
             raise ai_extract.AIError(
                 f"{provider.title()} is overloaded right now (too many users). This is on Google's side and usually "
                 f"clears in a few minutes: wait, then press Re-scan. Tip: add a {other.title()} key in Settings as a "
                 f"backup and the scanner will switch to it automatically. ({e})", status=e.status)
-        ai_extract._status(f"{provider.title()} is busy: reading this bill with {other.title()} instead")
+        why = "out of free quota" if e.kind == "daily_quota" or e.status == 429 else "busy"
+        ai_extract._status(f"{provider.title()} is {why}: reading this bill with {other.title()} instead")
         bill = ai_extract.extract(pages, other, other_key, None, hint)
-        note = f"Read by {other.title()} because {provider.title()} was busy"
-    used, why = bill.pop("_model", None), bill.pop("_switched", None)
-    if why == "retired" and not note:
+        note = f"Read by {other.title()} because {provider.title()} was {why}"
+    used, switched = bill.pop("_model", None), bill.pop("_switched", None)
+    if switched == "retired" and not note:
         # The chosen model no longer exists and we switched; remember the working one.
         s2 = load_settings()
         s2["model"] = used
