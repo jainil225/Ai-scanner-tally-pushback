@@ -50,6 +50,7 @@ DEFAULT_SETTINGS = {
     "claude_key": "",
     "model": "",
     "own_gstin": "",
+    "gemini_rpm": 5,              # free tier allows 5 requests/minute; 0 = no pacing
     "push_as_optional": True,
     "create_missing_ledgers": True,
     "default_purchase_ledger": "",
@@ -63,6 +64,8 @@ SECRET_KEYS = ("gemini_key", "claude_key")
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
 _lock = threading.RLock()
+_ai_status = {"msg": "", "at": 0.0}
+ai_extract.STATUS_HOOK = lambda m: _ai_status.update(msg=m, at=time.time())
 _ledger_cache = {}          # company -> (time, LedgerBook, ledgers list, vtypes)
 
 
@@ -185,6 +188,11 @@ def set_settings():
                 continue
         elif isinstance(default, bool):
             v = bool(v)
+        elif isinstance(default, int):
+            try:
+                v = max(0, int(v))
+            except (TypeError, ValueError):
+                continue
         elif isinstance(default, dict):
             v = v if isinstance(v, dict) else {}
         else:
@@ -198,6 +206,13 @@ def set_settings():
 
 
 # ── Tally reads ─────────────────────────────────────────────────────────────
+@app.get("/api/ai/status")
+def ai_status():
+    """Latest pacing / rate-limit message, so the UI can show 'waiting 40s…'."""
+    fresh = time.time() - _ai_status["at"] < 5
+    return jsonify({"ok": True, "msg": _ai_status["msg"] if fresh else ""})
+
+
 @app.get("/api/ai/models")
 def ai_models():
     """Live list of Gemini models the saved key can use (for the Settings dropdown)."""
@@ -308,6 +323,7 @@ def doc_scan(doc_id):
     meta["status"] = "scanning"
     save_doc(meta)
     try:
+        ai_extract.GEMINI_RPM = int(s.get("gemini_rpm", 5) or 0)
         bill = ai_extract.extract(pages, provider, key, s["model"] or None, hint)
         used = bill.pop("_model", None)
         if used and used != (s["model"] or ai_extract.PROVIDERS[provider]["default"]):

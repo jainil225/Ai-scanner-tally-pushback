@@ -209,6 +209,72 @@ class ExtractTests(unittest.TestCase):
             ai_extract.extract([b"x"], "gemini", "")
 
 
+class FakeResp:
+    def __init__(self, status, body, headers=None):
+        self.status_code, self._body, self.headers = status, body, headers or {}
+        self.text = json.dumps(body)
+
+    def json(self):
+        return self._body
+
+
+class RateLimitTests(unittest.TestCase):
+    OK = {"candidates": [{"content": {"parts": [{"text": '{"grand_total": 1}'}]}}]}
+    URL = "https://generativelanguage.googleapis.com/v1beta/models/m:generateContent"
+
+    def setUp(self):
+        self.clock = [1000.0]
+        self.sleeps = []
+        self.orig = (ai_extract.requests.post, ai_extract.time.sleep, ai_extract.time.time, ai_extract.GEMINI_RPM)
+        ai_extract.time.sleep = lambda s: (self.sleeps.append(round(s, 1)), self.clock.__setitem__(0, self.clock[0] + s))
+        ai_extract.time.time = lambda: self.clock[0]
+        ai_extract._recent.clear()
+
+    def tearDown(self):
+        ai_extract.requests.post, ai_extract.time.sleep, ai_extract.time.time, ai_extract.GEMINI_RPM = self.orig
+        ai_extract._recent.clear()
+
+    def per_minute_429(self):
+        return FakeResp(429, {"error": {"code": 429, "message":
+            "You exceeded your current quota. Quota exceeded for metric: generativelanguage.googleapis.com/"
+            "generate_content_free_tier_requests, limit: 5, model: gemini-3.8-flash. Please retry in 58.137388134s.",
+            "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "58s"}]}})
+
+    def test_waits_for_google_retry_delay_then_succeeds(self):
+        ai_extract.GEMINI_RPM = 0
+        replies = [self.per_minute_429(), FakeResp(200, self.OK)]
+        ai_extract.requests.post = lambda *a, **k: replies.pop(0)
+        self.assertEqual(ai_extract._post_with_retry(self.URL, {}, {}), self.OK)
+        self.assertEqual(self.sleeps, [59.0])
+
+    def test_daily_quota_fails_fast_with_clear_message(self):
+        ai_extract.GEMINI_RPM = 0
+        calls = []
+        body = {"error": {"code": 429, "message": "Quota exceeded for metric: "
+                          "generativelanguage.googleapis.com/generate_content_free_tier_requests_per_day, limit: 20"}}
+        ai_extract.requests.post = lambda *a, **k: (calls.append(1), FakeResp(429, body))[1]
+        with self.assertRaises(ai_extract.AIError) as cm:
+            ai_extract._post_with_retry(self.URL, {}, {})
+        self.assertIn("Daily free limit", str(cm.exception))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.sleeps, [])
+
+    def test_paces_under_requests_per_minute(self):
+        ai_extract.GEMINI_RPM = 5
+        ai_extract.requests.post = lambda *a, **k: FakeResp(200, self.OK)
+        for _ in range(6):
+            ai_extract._post_with_retry(self.URL, {}, {})
+        self.assertEqual(len(self.sleeps), 1)          # 6th request waited for the minute to roll over
+        self.assertGreaterEqual(self.sleeps[0], 60)
+
+    def test_claude_not_paced(self):
+        ai_extract.GEMINI_RPM = 1
+        ai_extract.requests.post = lambda *a, **k: FakeResp(200, {"content": []})
+        for _ in range(3):
+            ai_extract._post_with_retry("https://api.anthropic.com/v1/messages", {}, {})
+        self.assertEqual(self.sleeps, [])
+
+
 class MappingTests(unittest.TestCase):
     def test_intra_state_purchase(self):
         d = mapping.build_draft(bill(), book_from_fake())

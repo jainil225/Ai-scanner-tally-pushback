@@ -13,7 +13,9 @@ the rest of the app can trust the shape of the result.
 import base64
 import json
 import re
+import threading
 import time
+from collections import deque
 from datetime import datetime
 
 import requests
@@ -92,9 +94,66 @@ def _b64(jpg):
     return base64.b64encode(jpg).decode("ascii")
 
 
+# ── pacing / rate limits ────────────────────────────────────────────────────
+# Free Gemini keys allow only a few requests per minute (5 for flash today).
+# We pace our own requests under that limit instead of hitting it and failing.
+GEMINI_RPM = 5            # set from Settings by scanner.py; 0 = no pacing (paid keys)
+MAX_WAIT = 90             # longest we will sleep for one rate-limit pause (seconds)
+_pace_lock = threading.Lock()
+_recent = deque()         # timestamps of recent Gemini requests
+STATUS_HOOK = None        # optional callable(str) so the UI can show "waiting 40s…"
+
+
+def _status(msg):
+    if STATUS_HOOK:
+        try:
+            STATUS_HOOK(msg)
+        except Exception:
+            pass
+
+
+def _pace(url):
+    if "generativelanguage.googleapis.com" not in url or not GEMINI_RPM:
+        return
+    with _pace_lock:
+        while True:
+            now = time.time()
+            while _recent and now - _recent[0] >= 60:
+                _recent.popleft()
+            if len(_recent) < GEMINI_RPM:
+                _recent.append(now)
+                return
+            wait = 60 - (now - _recent[0]) + 0.5
+            _status(f"Free-tier limit: waiting {wait:.0f}s before the next bill")
+            time.sleep(wait)
+
+
+def _retry_delay(r, body):
+    """Seconds Google asks us to wait, from RetryInfo, the message, or Retry-After."""
+    for d in ((body.get("error") or {}).get("details") or []):
+        rd = d.get("retryDelay") if isinstance(d, dict) else None
+        if rd:
+            m = re.match(r"([\d.]+)s", str(rd))
+            if m:
+                return float(m.group(1))
+    m = re.search(r"retry in ([\d.]+)\s*s", json.dumps(body), re.I)
+    if m:
+        return float(m.group(1))
+    ra = r.headers.get("retry-after")
+    if ra and ra.replace(".", "", 1).isdigit():
+        return float(ra)
+    return None
+
+
+def _is_daily_quota(body):
+    t = json.dumps(body).lower()
+    return "per_day" in t or "perday" in t or "per day" in t
+
+
 def _post_with_retry(url, headers, payload):
     last = None
     for attempt in range(RETRIES + 1):
+        _pace(url)
         try:
             r = requests.post(url, headers=headers, json=payload, timeout=TIMEOUT)
         except requests.RequestException as e:
@@ -103,23 +162,31 @@ def _post_with_retry(url, headers, payload):
             continue
         if r.status_code == 200:
             return r.json()
-        if r.status_code in (429, 500, 502, 503, 504, 529) and attempt < RETRIES:
-            wait = 2 ** (attempt + 1)
-            ra = r.headers.get("retry-after")
-            if ra and ra.isdigit():
-                wait = min(int(ra), 60)
-            last = f"HTTP {r.status_code}"
-            time.sleep(wait)
-            continue
         try:
-            detail = r.json()
-            msg = (detail.get("error") or {}).get("message") or json.dumps(detail)[:400]
+            body = r.json()
+            msg = (body.get("error") or {}).get("message") or json.dumps(body)[:400]
         except ValueError:
-            msg = r.text[:400]
-        if r.status_code in (401, 403):
-            raise AIError(f"API key rejected ({r.status_code}): {msg}")
+            body, msg = {}, r.text[:400]
         if r.status_code == 429:
-            raise AIError(f"Rate limit / quota reached. Wait a minute and retry. ({msg})")
+            if _is_daily_quota(body):
+                raise AIError("Daily free limit of this Gemini key is used up. It resets at midnight US Pacific "
+                              "time (about 1:30 pm IST). To keep going now: enable billing on the key, use another "
+                              f"key, or switch to Claude in Settings. ({msg[:200]})", status=429)
+            wait = _retry_delay(r, body) or 2 ** (attempt + 2)
+            if attempt < RETRIES and wait <= MAX_WAIT:
+                _status(f"Rate limited by the AI: waiting {wait:.0f}s and retrying")
+                time.sleep(wait + 1)
+                last = "rate limited"
+                continue
+            raise AIError("The AI is still rate-limiting this key. Free Gemini allows only a few bills per minute: "
+                          "lower 'Requests per minute' in Settings, wait a minute and press Re-scan. "
+                          f"({msg[:200]})", status=429)
+        if r.status_code in (500, 502, 503, 504, 529) and attempt < RETRIES:
+            last = f"HTTP {r.status_code}"
+            time.sleep(2 ** (attempt + 1))
+            continue
+        if r.status_code in (401, 403):
+            raise AIError(f"API key rejected ({r.status_code}): {msg}", status=r.status_code)
         raise AIError(f"AI request failed ({r.status_code}): {msg}", status=r.status_code)
     raise AIError(f"AI request failed after retries: {last}")
 

@@ -140,7 +140,8 @@ a{color:var(--accent)}
     <div class="grid" style="margin-top:10px">
       <div class="f full" id="fGemini"><label>Gemini API key · <a href="https://aistudio.google.com/apikey" target="_blank">get a free key</a></label><input id="sGeminiKey" type="password" autocomplete="off" placeholder="AIza…"></div>
       <div class="f full" id="fClaude"><label>Claude API key · <a href="https://console.anthropic.com/settings/keys" target="_blank">get a key</a></label><input id="sClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
-      <div class="f full"><label>Model</label><input id="sModel" list="dlModels" placeholder="default"><datalist id="dlModels"></datalist></div>
+      <div class="f"><label>Model (blank = automatic)</label><input id="sModel" list="dlModels" placeholder="default"><datalist id="dlModels"></datalist></div>
+      <div class="f"><label>Gemini requests per minute</label><input id="sRpm" type="number" min="0" max="1000"><span class="hint">Free key: 5. Paid key: 0 (no limit).</span></div>
     </div>
     <p class="hint">Keys are saved only on this PC (<span id="dataDir"></span>) and sent only to the AI provider you choose.</p>
     <h3>Tally</h3>
@@ -322,8 +323,10 @@ async function scanOne(id){
 async function scanMany(ids){
   if (!S.settings.gemini_key_set && !S.settings.claude_key_set) { openSettings(); toast("Add an AI key first"); return; }
   S.busy=true; updateButtons();
-  for (const id of ids) await scanOne(id);       // one at a time: friendly to free-tier rate limits
-  S.busy=false; updateButtons();
+  // Show pacing / rate-limit waits (free Gemini allows only a few bills per minute)
+  const poll = setInterval(async()=>{ try { const r=await api("/api/ai/status"); if (r.msg) toast(r.msg, 4000); } catch(_){} }, 2500);
+  try { for (const id of ids) await scanOne(id); }  // one at a time: friendly to free-tier rate limits
+  finally { clearInterval(poll); S.busy=false; updateButtons(); }
 }
 $("#btnScanAll").onclick = () => {
   const ids = S.docs.filter(d=>d.status==="new"||d.status==="error"&&!d.draft).map(d=>d.id);
@@ -479,7 +482,7 @@ $("#btnXml").onclick = async () => {
 function openSettings(){
   const s=S.settings;
   document.querySelectorAll("[name=provider]").forEach(r=>r.checked = r.value===s.provider);
-  $("#sGeminiKey").value=s.gemini_key; $("#sClaudeKey").value=s.claude_key; $("#sModel").value=s.model;
+  $("#sGeminiKey").value=s.gemini_key; $("#sRpm").value=s.gemini_rpm; $("#sClaudeKey").value=s.claude_key; $("#sModel").value=s.model;
   $("#sTallyUrl").value=s.tally_url; $("#sOwnGstin").value=s.own_gstin;
   $("#sDefPurchase").value=s.default_purchase_ledger; $("#sDefSales").value=s.default_sales_ledger;
   $("#sDefRound").value=s.default_roundoff_ledger; $("#sDefFreight").value=s.default_freight_ledger;
@@ -503,7 +506,7 @@ $("#sSave").onclick=async()=>{
   const vt={}; if ($("#sVtPurchase").value) vt.Purchase=$("#sVtPurchase").value; if ($("#sVtSales").value) vt.Sales=$("#sVtSales").value;
   S.settings = await api("/api/settings",{method:"POST", body:{
     provider:(document.querySelector("[name=provider]:checked")||{}).value||"gemini",
-    gemini_key:$("#sGeminiKey").value, claude_key:$("#sClaudeKey").value, model:$("#sModel").value,
+    gemini_key:$("#sGeminiKey").value, claude_key:$("#sClaudeKey").value, model:$("#sModel").value, gemini_rpm:$("#sRpm").value,
     tally_url:$("#sTallyUrl").value, own_gstin:$("#sOwnGstin").value,
     default_purchase_ledger:$("#sDefPurchase").value, default_sales_ledger:$("#sDefSales").value,
     default_roundoff_ledger:$("#sDefRound").value, default_freight_ledger:$("#sDefFreight").value, vtype_map:vt}});
