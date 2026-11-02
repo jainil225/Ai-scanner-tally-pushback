@@ -1,0 +1,136 @@
+{
+  "1_purchase_intra_state_18pct.jpg": {
+    "what": "Purchase, same state (CGST + SGST), single rate 18%, round-off. Party already in Tally (by GSTIN).",
+    "supplier": "Sharma Steel Pvt Ltd",
+    "supplier_gstin": "24AAACS1234F1Z5",
+    "buyer": "Demo Traders",
+    "invoice_number": "SS/1042",
+    "invoice_date_printed": "05/04/2026",
+    "pages": 1,
+    "taxable_total": 65218.06,
+    "cgst": 5869.62,
+    "sgst": 5869.62,
+    "igst": 0,
+    "round_off": -0.3,
+    "grand_total": 76957.0,
+    "gst_breakup": [
+      {
+        "rate": 18,
+        "taxable": 65218.06,
+        "cgst": 5869.62,
+        "sgst": 5869.62,
+        "igst": 0
+      }
+    ]
+  },
+  "2_purchase_interstate_igst_12_18.png": {
+    "what": "Purchase from another state (IGST), two GST rates 12% and 18%. New party (not in Tally).",
+    "supplier": "Kaveri Electricals & Co.",
+    "supplier_gstin": "27AAKFK5521M1Z3",
+    "buyer": "Demo Traders",
+    "invoice_number": "KEC/26-27/0387",
+    "invoice_date_printed": "18-04-2026",
+    "pages": 1,
+    "taxable_total": 64742.5,
+    "cgst": 0,
+    "sgst": 0,
+    "igst": 10498.65,
+    "round_off": -0.15,
+    "grand_total": 75241.0,
+    "gst_breakup": [
+      {
+        "rate": 12,
+        "taxable": 19250.0,
+        "cgst": 0,
+        "sgst": 0,
+        "igst": 2310.0
+      },
+      {
+        "rate": 18,
+        "taxable": 45492.5,
+        "cgst": 0,
+        "sgst": 0,
+        "igst": 8188.65
+      }
+    ]
+  },
+  "3_purchase_two_pages_5_18pct_freight.pdf": {
+    "what": "Two-page scanned PDF, 22 items, GST 5% and 18%, freight charged on the bill.",
+    "supplier": "Annapurna Packaging Industries",
+    "supplier_gstin": "24AAHFA7788K1ZQ",
+    "buyer": "Demo Traders",
+    "invoice_number": "API-2261",
+    "invoice_date_printed": "02.05.2026",
+    "pages": 2,
+    "taxable_total": 171916.0,
+    "cgst": 13556.57,
+    "sgst": 13556.57,
+    "igst": 0,
+    "round_off": -0.14,
+    "grand_total": 199029.0,
+    "gst_breakup": [
+      {
+        "rate": 5,
+        "taxable": 29475.0,
+        "cgst": 736.88,
+        "sgst": 736.88,
+        "igst": 0
+      },
+      {
+        "rate": 18,
+        "taxable": 142441.0,
+        "cgst": 12819.69,
+        "sgst": 12819.69,
+        "igst": 0
+      }
+    ]
+  },
+  "4_sales_invoice_by_demo_traders.jpg": {
+    "what": "SALES bill issued BY Demo Traders. Set your GSTIN 24AAAAA0000A1Z5 in Settings to see it become a Sales voucher.",
+    "supplier": "Demo Traders",
+    "supplier_gstin": "24AAAAA0000A1Z5",
+    "buyer": "Patel Hardware Stores",
+    "invoice_number": "DT/S/0915",
+    "invoice_date_printed": "21/05/2026",
+    "pages": 1,
+    "taxable_total": 25075.0,
+    "cgst": 2256.75,
+    "sgst": 2256.75,
+    "igst": 0,
+    "round_off": -0.5,
+    "grand_total": 29588.0,
+    "gst_breakup": [
+      {
+        "rate": 18,
+        "taxable": 25075.0,
+        "cgst": 2256.75,
+        "sgst": 2256.75,
+        "igst": 0
+      }
+    ]
+  },
+  "5_courier_bill_phone_photo.jpg": {
+    "what": "Service bill (SAC), photographed on a phone: tilted, shadowed, slightly blurred.",
+    "supplier": "SwiftLine Couriers",
+    "supplier_gstin": "24AAJCS3344B1ZK",
+    "buyer": "Demo Traders",
+    "invoice_number": "SLC/AMD/77812",
+    "invoice_date_printed": "30-May-2026",
+    "pages": 1,
+    "taxable_total": 3186.4,
+    "cgst": 286.77,
+    "sgst": 286.77,
+    "igst": 0,
+    "round_off": 0.06,
+    "grand_total": 3760.0,
+    "gst_breakup": [
+      {
+        "rate": 18,
+        "taxable": 3186.4,
+        "cgst": 286.77,
+        "sgst": 286.77,
+        "igst": 0
+      }
+    ]
+  }
+}

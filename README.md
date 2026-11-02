@@ -72,6 +72,21 @@ A purchase bill of ₹10,000 + 9% CGST + 9% SGST with a 40-paise round-off becom
 Vouchers are posted in **accounting mode** (ledger lines, no stock items). The item list read from the bill is shown
 in the app for reference.
 
+## Sample bills
+
+`samples/` has five fictional GST bills to try the app with (all marked SAMPLE), plus `all_samples.zip`:
+
+| File | Tests |
+|---|---|
+| `1_purchase_intra_state_18pct.jpg` | CGST + SGST, one rate, round-off, discount on one line |
+| `2_purchase_interstate_igst_12_18.png` | IGST from Maharashtra, two GST rates, new party |
+| `3_purchase_two_pages_5_18pct_freight.pdf` | 2-page scanned PDF, 22 items, 5% + 18%, freight |
+| `4_sales_invoice_by_demo_traders.jpg` | A sales bill (set own GSTIN `24AAAAA0000A1Z5` in Settings) |
+| `5_courier_bill_phone_photo.jpg` | Service bill (SAC) photographed on a phone: tilted, shadowed |
+
+`samples/expected.json` holds the correct totals for each bill so you can check what the AI read.
+Regenerate them with `python samples/make_samples.py`.
+
 ## Files
 
 | File | What it does |
