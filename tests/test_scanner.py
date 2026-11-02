@@ -430,6 +430,33 @@ class MappingTests(unittest.TestCase):
         self.assertEqual(d["voucher_number"], "SS/1042")
         self.assertEqual(balance(d["entries"]), 0)
 
+    def test_plain_cgst_sgst_ledgers_both_matched(self):
+        # Seen on a real company: "Cgst" matched but SGST went to a new ledger instead of "Sgst"
+        book = mapping.LedgerBook([
+            {"name": "Sharma Steel Pvt Ltd", "parent": "Sundry Creditors", "gstin": "24AAACS1234F1Z5"},
+            {"name": "GST PURCHASE", "parent": "Purchase Accounts", "gstin": ""},
+            {"name": "Cgst", "parent": "Duties & Taxes", "gstin": ""},
+            {"name": "Sgst", "parent": "Duties & Taxes", "gstin": ""},
+            {"name": "Igst", "parent": "Duties & Taxes", "gstin": ""},
+            {"name": "Round Off", "parent": "Indirect Expenses", "gstin": ""}])
+        d = mapping.build_draft(bill(), book)
+        names = [e["ledger"] for e in d["entries"]]
+        self.assertEqual(names[:4], ["Sharma Steel Pvt Ltd", "GST PURCHASE", "Cgst", "Sgst"])
+        self.assertEqual(d["new_ledgers"], [])
+        self.assertIn("dt 05-04-2026", d["narration"])
+
+    def test_tax_ledgers_named_by_tax_head(self):
+        book = mapping.LedgerBook([
+            {"name": "Purchase", "parent": "Purchase Accounts", "gstin": ""},
+            {"name": "Central Tax (Input)", "parent": "Duties & Taxes", "gstin": ""},
+            {"name": "State Tax (Input)", "parent": "Duties & Taxes", "gstin": ""},
+            {"name": "Integrated Tax (Input)", "parent": "Duties & Taxes", "gstin": ""}])
+        d = mapping.build_draft(bill(), book)
+        names = {e["ledger"] for e in d["entries"]}
+        self.assertTrue({"Central Tax (Input)", "State Tax (Input)"} <= names)
+        d = mapping.build_draft(bill(cgst=0, sgst=0, igst=1800), book)
+        self.assertIn("Integrated Tax (Input)", {e["ledger"] for e in d["entries"]})
+
     def test_empty_book_proposes_ledgers(self):
         d = mapping.build_draft(bill(), mapping.LedgerBook([]))
         names = {n["name"] for n in d["new_ledgers"]}

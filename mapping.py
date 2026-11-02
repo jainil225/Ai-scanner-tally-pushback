@@ -26,6 +26,14 @@ VTYPE_BY_DOC = {
     "other": "Journal",
 }
 
+# Words that identify each GST ledger, tried in order ("Cgst", "Input CGST 9%", "Central Tax"...)
+TAX_ALIASES = {
+    "cgst": ["cgst", "central tax", "central gst", "c gst"],
+    "sgst": ["sgst", "utgst", "state tax", "state gst", "s gst"],
+    "igst": ["igst", "integrated tax", "integrated gst", "i gst"],
+    "cess": ["cess"],
+}
+
 # Which side the party sits on, per voucher base type
 PARTY_SIDE = {"Purchase": "Cr", "Sales": "Dr", "Credit Note": "Cr", "Debit Note": "Dr", "Journal": "Cr"}
 
@@ -100,6 +108,12 @@ class LedgerBook:
             if s > best_score:
                 best, best_score = l["name"], s
         return best
+
+
+def _dmy(iso):
+    """'2026-04-05' -> '05-04-2026' (how Indian users read dates)."""
+    p = iso.split("-")
+    return f"{p[2]}-{p[1]}-{p[0]}" if len(p) == 3 else iso
 
 
 def _fmt_rate(r):
@@ -210,13 +224,12 @@ def build_draft(bill, book, settings=None):
         if kind in ("cgst", "sgst", "igst", "cess"):
             pool = book.in_groups("Duties & Taxes")
             io_pref, io_avoid = (["input"], ["output"]) if is_purchase_side else (["output"], ["input"])
-            must = [kind] if kind != "sgst" else []
-            name = book.pick(pool, must=must, prefer=io_pref, avoid=io_avoid, rate=rate)
-            if kind == "sgst" and not name:
-                name = book.pick(pool, must=["sgst"], prefer=io_pref, avoid=io_avoid, rate=rate) \
-                    or book.pick(pool, must=["utgst"], prefer=io_pref, avoid=io_avoid, rate=rate)
-            if kind == "sgst" and name and "sgst" not in name.lower() and "utgst" not in name.lower():
-                name = None
+            # Every alias must appear in the name: "sgst" never matches a "Cgst" ledger
+            name = None
+            for alias in TAX_ALIASES[kind]:
+                name = book.pick(pool, must=alias.split(), prefer=io_pref, avoid=io_avoid, rate=rate)
+                if name:
+                    break
             if not name:
                 pre = "Input" if is_purchase_side else "Output"
                 name = f"{pre} {kind.upper()}" + (f" {_fmt_rate(rate)}%" if rate else "")
@@ -284,7 +297,7 @@ def build_draft(bill, book, settings=None):
     narration = bill.get("narration") or ""
     if bill["invoice_number"]:
         narration = (f"Bill No. {bill['invoice_number']}"
-                     + (f" dt {bill['invoice_date']}" if bill["invoice_date"] else "")
+                     + (f" dt {_dmy(bill['invoice_date'])}" if bill["invoice_date"] else "")
                      + (f" - {narration}" if narration else ""))
     return {
         "voucher_type": vt_name,
